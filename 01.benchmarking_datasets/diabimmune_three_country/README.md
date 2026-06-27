@@ -37,7 +37,7 @@ mechanism (`MCAR/`, `MAR/`, `MNAR/`) holding the masks at 9 missingness ratios
 | Mechanism | Meaning | How it's generated |
 |---|---|---|
 | **MCAR** | missing completely at random | uniform random masking of timepoints |
-| **MAR** | depends on observed covariates | `pyampute`, driven by a per-country combination of meaningful, non-time-correlated covariates |
+| **MAR** | depends on observed covariates | `pyampute`, driven by a per-country combination of meaningful observed covariates |
 | **MNAR** | depends on the timepoint itself | direct longitudinal-dropout weighting (later visits more likely missing) |
 
 A mask file is a `subject × timepoint` 0/1 matrix (`0` = masked). The masked
