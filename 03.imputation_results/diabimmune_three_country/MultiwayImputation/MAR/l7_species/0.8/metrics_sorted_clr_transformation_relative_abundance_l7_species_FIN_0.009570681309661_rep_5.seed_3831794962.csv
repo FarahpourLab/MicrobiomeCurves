@@ -1,0 +1,2 @@
+"mse","rmse","mae","n_missing","mechanism","tax_level","condition","mask_ratio","pseudo_count","num_com","max_iter","burn_in","source_file","mask_file"
+1.78694794402924,1.33676772254167,0.769788616583048,8475,"MAR","l7_species","FIN","0.8",0.009570681309661,3,5000,2000,"sorted_clr_transformation_relative_abundance_l7_species_FIN_0.009570681309661.csv","masked_metadata_l7_species_FIN.rep_5.seed_3831794962.csv"
