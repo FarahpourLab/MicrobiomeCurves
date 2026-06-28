@@ -49,17 +49,3 @@ tables and plots. Two competitors are handled — **DeepMicroGen** and **BAMITA*
 
    Only the tuned dataset (Helminth + DeepMicroGen) keeps a single parameter-set
    for plotting (`lr=0.001, dr=0.3, ep=3000`); the others have a single fixed set.
-
-## Run
-
-Paths are anchored to each script, so run from anywhere:
-
-```bash
-python "evaluate_deepmicrogen.py"          # -> results/DeepMicroGen/*.csv
-python "evaluate_multiway_imputation.py"   # -> results/MultiwayImputation/*.csv
-python "report_deepmicrogen.py"            # -> results/DeepMicroGen/plot/...
-python "report_multiway_imputation.py"     # -> results/MultiwayImputation/plot/...
-```
-
-Input: `04.Benchmarking/<dataset>/<tool>/...` (imputations) and
-`01.Benchmarking Datasets/<dataset>/03.processed/` (ground truth + masks).
