@@ -44,10 +44,14 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # The devel image does not ship remotes, and the next lines need it.
+          if (!requireNamespace("remotes", quietly = TRUE)) {
+              install.packages("remotes")
+          }
           BiocManager::install(ask = FALSE, update = TRUE)
           remotes::install_deps(dependencies = TRUE, upgrade = "always")
-          BiocManager::install("BiocCheck", ask = FALSE, update = FALSE)
-          remotes::install_cran("rcmdcheck")
+          BiocManager::install(c("BiocCheck", "rcmdcheck"),
+                               ask = FALSE, update = FALSE)
         shell: Rscript {0}
 
       - name: Session info
