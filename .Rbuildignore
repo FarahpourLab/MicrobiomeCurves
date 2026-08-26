@@ -1,0 +1,7 @@
+^TaxaTimeImpute\.Rproj$
+^\.Rproj\.user$
+^data-raw$
+^\.github$
+^README\.md$
+^.*\.Rcheck$
+^.*\.BiocCheck$

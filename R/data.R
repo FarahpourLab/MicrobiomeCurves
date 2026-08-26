@@ -1,0 +1,69 @@
+#' Simulated longitudinal microbiome table with missing samples
+#'
+#' @description
+#' A small example dataset in the layout the package expects, containing
+#' missing whole samples. Provided so the workflow can be run immediately
+#' without any external file.
+#'
+#' @details
+#' The data are **simulated**, not from any real cohort. Each taxon follows a
+#' smooth curve over time, each subject carries a random offset, and normal
+#' noise is added. Values are on a CLR-like scale, so they are centred near
+#' zero and may be negative.
+#'
+#' The design mirrors the BONUS cystic-fibrosis cohort analysed in the paper:
+#' 12 taxa, 10 subjects and 7 time points, with a few whole samples missing.
+#' Both forms of missingness that \code{\link{tti_detect_missing}} recognises
+#' are represented:
+#'
+#' \itemize{
+#'   \item \code{S04.2}  -  the column is absent from the table entirely
+#'     (\code{"absent_column"}).
+#'   \item \code{S07.4} and \code{S02.1}  -  the columns are present but every
+#'     taxon in them is \code{NA} (\code{"all_na"}).
+#' }
+#'
+#' The same table is also shipped as a raw CSV, so the more realistic
+#' \code{read.csv()} entry point can be demonstrated:
+#'
+#' \preformatted{
+#' path <- system.file("extdata", "taxa_demo.csv", package = "TaxaTimeImpute")
+#' dat  <- read.csv(path, check.names = FALSE)
+#' }
+#'
+#' @note
+#' Fitting this dataset emits repeated \code{"There is a time gap of at
+#' least ..."} warnings. These come from \code{fdapace::FPCA}, not from this
+#' package, and are expected for sparse longitudinal designs  -  real cohorts
+#' such as BONUS and DIABIMMUNE produce them too. They are notices about the
+#' sampling design, not errors, and the imputation is unaffected.
+#'
+#' @format A data frame with 12 rows (taxa) and 70 columns.
+#'
+#' The first column, \code{OTU_ID}, is a character taxon identifier running from
+#' \code{"Taxon01"} to \code{"Taxon12"}.
+#'
+#' The remaining 69 columns are numeric abundances, one per subject-timepoint,
+#' named \code{"<subject>.<time>"}  -  subjects \code{S01} to \code{S10} crossed
+#' with time points \code{0} to \code{6}. Of the 70 possible combinations, 69
+#' are present as columns (\code{S04.2} is absent) and two of those present are
+#' entirely \code{NA} (\code{S02.1} and \code{S07.4}).
+#'
+#' @source
+#' Simulated by \code{data-raw/make_taxa_demo.R} in the package sources, with
+#' \code{set.seed(123)}. That script regenerates the dataset exactly.
+#'
+#' @usage data(taxa_demo)
+#'
+#' @seealso \code{\link{tti_run}}, \code{\link{tti_detect_missing}}
+#'
+#' @examples
+#' data(taxa_demo)
+#'
+#' # what is missing, and why
+#' info <- tti_detect_missing(taxa_demo, taxon_col = "OTU_ID")
+#' info$missing
+#'
+#' # observations remaining per subject
+#' head(info$observed)
+"taxa_demo"

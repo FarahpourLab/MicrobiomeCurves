@@ -1,0 +1,72 @@
+Package: TaxaTimeImpute
+Type: Package
+Title: Imputation of Missing Timepoints in Longitudinal Microbiome Data
+Version: 0.99.0
+Authors@R: c(
+    person("Alireza", "Dostmohammadi",
+           email = "alireza.dostmohammadi@uni-due.de",
+           role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0003-4311-2056")),
+    person("Mohammad", "Darbalaei",
+           email = "mohammad.darbalaei@uni-due.de",
+           role = "aut",
+           comment = c(ORCID = "0009-0003-4561-0048")),
+    person("Daniel", "Hoffmann",
+           email = "daniel.hoffmann@uni-due.de",
+           role = "aut",
+           comment = c(ORCID = "0000-0003-2973-7869")),
+    person("Farnoush", "Farahpour",
+           email = "farnoush.farahpour@uni-due.de",
+           role = "aut",
+           comment = c(ORCID = "0000-0002-4510-8483")),
+    person("Deutsche Forschungsgemeinschaft (DFG)",
+           role = "fnd"),
+    person("DFG Research Training Group 2762 (GRK 2762)",
+           role = "fnd"))
+Description:
+    Longitudinal microbiome studies often lose whole samples when a subject
+    misses a visit or a library fails quality control. The affected
+    subject-timepoint is then absent from the abundance table.
+    TaxaTimeImpute estimates the missing values by modelling each taxon's
+    abundance over time as a smooth curve and sharing information across
+    subjects with Functional Principal Component Analysis. Sparse and
+    irregularly sampled designs are supported. Imputed values can be reported
+    with analytic or bootstrap confidence intervals. Functional-depth outlier
+    screening and trajectory clustering are available as options. Input may be
+    an abundance table, a SummarizedExperiment, or a TreeSummarizedExperiment.
+License: GPL-3
+Encoding: UTF-8
+Depends:
+    R (>= 4.5.0)
+Imports:
+    cluster,
+    dplyr,
+    fda.usc,
+    fdapace,
+    ggplot2,
+    magrittr,
+    methods,
+    patchwork,
+    S4Vectors,
+    stats,
+    stringr,
+    SummarizedExperiment,
+    tibble,
+    tidyr,
+    TreeSummarizedExperiment,
+    utils,
+    withr
+Suggests:
+    BiocStyle,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+biocViews: Software, Microbiome, Metagenomics, TimeCourse, Preprocessing,
+    StatisticalMethod, Clustering, DimensionReduction, PrincipalComponent,
+    QualityControl, Visualization
+URL: https://github.com/FarahpourLab/TaxaTimeImpute
+BugReports: https://github.com/FarahpourLab/TaxaTimeImpute/issues
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+VignetteBuilder: knitr
+Config/testthat/edition: 3
