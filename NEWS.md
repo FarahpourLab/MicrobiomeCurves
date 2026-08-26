@@ -20,6 +20,23 @@ First submission to Bioconductor.
   imputed value. `tti_plot()` draws a trajectory with its interval.
 * Fraiman-Muniz functional-depth outlier screening and silhouette-selected
   trajectory clustering are available as options.
+* `cluster_method` chooses how subjects are grouped once a taxon has been
+  fitted. `"fpca"`, the default, runs k-means on the FPC scores.
+  `"kmeans_fd"` runs functional k-means on the fitted curves through
+  **fda.usc**, comparing whole trajectories rather than truncated score
+  vectors, and falls back to `"fpca"` on the small sets of curves where
+  `kmeans.fd()` cannot fit.
+* Input is validated before anything is computed, and each problem reports
+  its own cause: sample columns that are not numeric, duplicated taxon
+  names, a mask naming subjects or times absent from the table, a mask that
+  covers every sample, a design with only one subject, and malformed
+  `mask_list` entries. A sample column holding values for some taxa and
+  `NA` for others is rejected rather than silently ignored, since the method
+  imputes whole missing samples.
+* Fits that fall back or fail are reported once at the end of a run, rather
+  than per taxon, covering FPCA fits that could not be produced, fits resting
+  on three or fewer curves, and functional k-means fallbacks. `tti_metrics()`
+  warns when a fit has no observed values to score against.
 * `taxa_demo` provides a small simulated dataset containing both forms of
   missingness. `tti_as_demo_se()` returns the same data as a
   `TreeSummarizedExperiment`.
@@ -39,3 +56,6 @@ First submission to Bioconductor.
   by the user. Both are now imported.
 * Fitting no longer resets the caller's random number stream. Results for a
   given `seed` are unchanged.
+* Imputing a `SummarizedExperiment` that has no row names no longer fails.
+  Generated feature names were written onto the completed matrix while the
+  object itself still had none, which the assay setter rejected.
