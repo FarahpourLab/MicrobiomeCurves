@@ -72,12 +72,18 @@ Two reasons appear:
 * `absent_column`: the subject-timepoint has no column.
 * `all_na`: the column exists but every taxon in it is `NA`.
 
-Columns that are only *partly* `NA` are reported separately and are **not**
-treated as missing samples:
+A sample column must be either fully observed or entirely `NA`. A column
+holding values for some taxa and `NA` for others is neither, and is rejected
+with an error naming the offending columns, so `partial_na` is empty in any
+result you actually receive:
 
 ```{r partial}
 info$partial_na
 ```
+
+If that error appears, correct the data first: make the column entirely `NA`
+if the sample is genuinely missing, or fill in the individual `NA` values if
+it is not.
 
 It is also worth checking how many observations each subject retains. A
 subject with fewer than two informative points contributes to the model fit
@@ -230,6 +236,24 @@ tti_plot(
     ci_method = "analytic"
 )
 ```
+
+Two panels are returned: the fitted curve with its band on the left, and the
+subject's raw observations on the right.
+
+Reading it:
+
+* The **imputed value** sits on the fitted curve at the marked time. It is not
+  interpolated between neighbouring points; it is where the shared
+  time-course, conditioned on this subject's own observations, places the
+  subject.
+* The **width of the band** is the honest part. It widens where the subject
+  has few nearby observations, so a narrow band means the estimate is well
+  determined and a wide one means it rests mostly on the population curve.
+  Compare it against the spread of the observed points: a band much wider than
+  that spread is a weakly informed imputation, and worth reporting as such.
+* **Observed points lying far from the curve** mean this subject departs from
+  the shape shared across subjects. The imputation still borrows that shape,
+  so treat such a value with more caution than the band alone suggests.
 
 # Optional refinements
 
