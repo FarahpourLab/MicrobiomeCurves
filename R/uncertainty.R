@@ -98,3 +98,55 @@ tti_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
     }
     cbind(lower = ci$lower, upper = ci$upper, se = ci$se)
 }
+
+#' Intervals around the imputed values of one taxon
+#'
+#' @description
+#' The numbers behind the uncertainty pages: every value imputed for a taxon
+#' with its 95% analytic interval. Useful for filtering a completed table by
+#' how well determined each imputed value actually was.
+#'
+#' @param run An object returned by [tti_run()].
+#' @param taxon Character name of the taxon, as it appears in the row names
+#'   of the abundance table.
+#'
+#' @return A data frame with one row per imputed value of that taxon:
+#'   `subject`, `time`, `time_label`, `imputed`, `lower`, `upper` and `se`,
+#'   with the subject and time given as the caller wrote them.
+#'
+#' @examples
+#' demo <- tti_demo_data()
+#' run <- suppressWarnings(tti_run(
+#'     demo$counts, demo$metadata,
+#'     sample_col = "sample", subject_col = "subject", time_col = "time",
+#'     K = 1, verbose = FALSE
+#' ))
+#'
+#' tti_uncertainty(run, rownames(demo$counts)[1])
+#'
+#' @seealso [tti_run()], whose `out_dir` writes these as one page per value.
+#'
+#' @export
+tti_uncertainty <- function(run, taxon) {
+    if (!inherits(run, "tti_run")) {
+        stop("run must be an object returned by tti_run().", call. = FALSE)
+    }
+    if (is.null(run$design)) {
+        stop(
+            "This run carries no design, so subjects and times cannot be ",
+            "reported as you wrote them.",
+            call. = FALSE
+        )
+    }
+
+    known <- unique(run$fit$pred_long$species)
+    if (!(taxon %in% known)) {
+        stop(
+            "No taxon called '", taxon, "' was imputed. Imputed taxa are: ",
+            tti_fmt_some(known),
+            call. = FALSE
+        )
+    }
+
+    tti_taxon_uncertainty(run$fit, taxon, run$design)
+}

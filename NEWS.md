@@ -25,11 +25,20 @@ First submission to Bioconductor.
   table; `imputation_log.txt`, recording the design, the time points in
   order, the counts of samples, subjects and time points, every
   subject-timepoint that was missing and why, and every warning raised; and
-  `uncertainty_by_taxon.pdf`, one page per taxon showing each imputed value
-  with its 95% analytic interval, so a taxon whose gaps rest on little
-  information is visible rather than buried in the table. `plots = FALSE`
-  turns the drawing off, and `plot_format = "png"` or `"both"` writes one
-  image per taxon at `dpi`, which defaults to 300.
+  `uncertainty_by_taxon.pdf`, one page per taxon showing every
+  subject's trajectory, the fitted curve and the 95% band around the
+  prediction, so a value that rests on little information is visible rather
+  than buried in the table. With outlier screening on the page draws two
+  fits, over all subjects and with the flagged trajectories removed, since
+  the gap between them is what screening did to that value; with screening
+  off there is one fit and no outlier vocabulary. A taxon's imputed values
+  are drawn side by side as facets, spilling onto further pages rather than
+  being dropped when there are more than fit legibly; a run that would draw
+  a great many pages warns before starting. `plots = FALSE` turns the
+  drawing off, and `plot_format = "png"` or `"both"` writes one image per
+  page at `dpi`, which defaults to 300.
+* `tti_uncertainty()` returns the same intervals as a table, for filtering a
+  completed table by how well determined each imputed value was.
 * Results come back under the caller's own sample names, ordered by subject
   and then time, in both `completed` and the long `imputed` table. A column
   created for a subject-timepoint that had no sample is named from its

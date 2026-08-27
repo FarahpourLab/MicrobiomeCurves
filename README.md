@@ -175,12 +175,23 @@ MISSING (1 of 18 subject-timepoints)
   SUB03  at time 14  [absent_sample]  no sample was collected
 ```
 
-The uncertainty pages are the thing to look at before treating imputed
-values as data: a taxon whose gaps rest on very little information shows wide
-intervals, and says so on its own page. Turn them off with `plots = FALSE`.
-For raster copies, `plot_format = "png"` (or `"both"`) writes one image per
-taxon at `dpi`, which defaults to 300; the PDF is vector and is sharp at any
-size, so `dpi` does not apply to it.
+Each uncertainty page shows what an imputed value actually rests on: every
+subject's trajectory, the fitted curve through them, and the 95% band around
+the prediction for the subject whose sample was missing.
+
+With outlier screening on (`use_outliers = TRUE`, the default) the page draws
+two fits — one over all subjects, one with the flagged trajectories removed —
+because the gap between them is what screening did to that value. With
+screening off there is one fit and no outlier vocabulary on the page at all.
+
+One page per taxon, with that taxon's imputed values side by side as facets.
+A taxon with more than six spills onto further pages rather than losing any.
+When a run would draw a great many pages, it says so before starting.
+
+`tti_uncertainty(run, taxon)` returns the same intervals as a table. Turn the
+drawing off with `plots = FALSE`. For raster copies, `plot_format = "png"`
+(or `"both"`) writes one image per page at `dpi`, which defaults to 300; the
+PDF is vector and is sharp at any size, so `dpi` does not apply to it.
 
 Everything written is also returned, in `run$design` and `run$missing`, so
 nothing is available only on screen. To inspect a design without fitting,

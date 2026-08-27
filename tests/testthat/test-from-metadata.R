@@ -422,6 +422,7 @@ test_that("uncertainty plotting can be turned off and switched to png", {
         out_dir = png_out, plot_format = "png", dpi = 150,
         K = 1, verbose = FALSE
     ))
+    # One page per taxon now, not one per imputed value.
     pngs <- list.files(file.path(png_out, "uncertainty_png"), pattern = "png$")
     expect_length(pngs, length(s$taxa))
     unlink(png_out, recursive = TRUE)
@@ -459,4 +460,133 @@ test_that("every imputed cell gets an interval, screened-out subjects too", {
     expect_false(anyNA(unc$se))
     expect_true(all(unc$lower <= unc$imputed))
     expect_true(all(unc$upper >= unc$imputed))
+})
+
+test_that("tti_uncertainty returns the interval behind each imputed value", {
+    demo <- tti_demo_data()
+    run <- suppressWarnings(tti_run(
+        demo$counts, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        K = 1, verbose = FALSE
+    ))
+
+    u <- tti_uncertainty(run, rownames(demo$counts)[1])
+    expect_s3_class(u, "data.frame")
+    expect_equal(nrow(u), nrow(run$missing))
+    expect_true(all(
+        c("subject", "time", "imputed", "lower", "upper", "se") %in% names(u)
+    ))
+    expect_true(all(u$lower <= u$imputed & u$imputed <= u$upper))
+    expect_true(all(u$subject %in% run$design$subjects))
+
+    expect_error(tti_uncertainty(run, "not_a_taxon"), "No taxon called")
+    expect_error(tti_uncertainty(list(), "x"), "must be an object")
+})
+
+test_that("the uncertainty panel reflects whether screening was on", {
+    demo <- tti_demo_data()
+    sp <- rownames(demo$counts)[1]
+
+    on <- suppressWarnings(tti_run(
+        demo$counts, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        use_outliers = TRUE, K = 1, verbose = FALSE
+    ))
+    off <- suppressWarnings(tti_run(
+        demo$counts, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        use_outliers = FALSE, K = 1, verbose = FALSE
+    ))
+
+    pd_on <- suppressWarnings(TaxaTimeImpute:::tti_panel_data(
+        on$fit, sp, on$fit$pred_long$rep[1], on$fit$pred_long$time[1],
+        on$design, TRUE
+    ))
+    pd_off <- suppressWarnings(TaxaTimeImpute:::tti_panel_data(
+        off$fit, sp, off$fit$pred_long$rep[1], off$fit$pred_long$time[1],
+        off$design, FALSE
+    ))
+
+    # With screening on, a flagged trajectory means two fits to compare.
+    expect_true(any(grepl("Flagged outlier", pd_on$traj$grp)))
+    expect_setequal(
+        unique(pd_on$bands$set),
+        c("Fit, all replicates", "Fit, outliers excluded")
+    )
+    expect_match(pd_on$subtitle, "screening on")
+
+    # With it off there is one fit and no outlier vocabulary at all.
+    expect_equal(unique(pd_off$traj$grp), "Subjects")
+    expect_equal(unique(pd_off$bands$set), "Fit")
+    expect_match(pd_off$subtitle, "screening off")
+    expect_false(any(grepl("outlier", pd_off$colour_breaks, ignore.case = TRUE)))
+
+    # A real run never knows the masked value, so no truth point is drawn.
+    expect_equal(nrow(pd_on$truth), 0)
+
+    # The band spans the fitted grid rather than the single imputed point.
+    expect_gt(length(unique(pd_on$bands$time)), 10)
+})
+
+test_that("a taxon gets one page, with its imputed values as facets", {
+    demo <- tti_demo_data()
+    run <- suppressWarnings(tti_run(
+        demo$counts, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        K = 1, verbose = FALSE
+    ))
+
+    taxa <- unique(run$fit$pred_long$species)
+    cells <- sum(run$fit$pred_long$species == taxa[1])
+    expect_gt(cells, 1)
+
+    pages <- suppressWarnings(TaxaTimeImpute:::tti_taxon_pages(
+        run$fit, taxa[1], run$design, isTRUE(run$fit$use_outliers)
+    ))
+    # Several imputed values, still one page.
+    expect_length(pages, 1)
+})
+
+test_that("a taxon with many imputed values spills onto further pages", {
+    set.seed(3)
+    subs <- paste0("SUB", sprintf("%02d", 1:10))
+    tms <- 0:5
+    meta <- expand.grid(
+        SubjectID = subs, Day = tms,
+        KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+    )
+    meta <- meta[order(meta$SubjectID, meta$Day), ]
+    meta$SampleID <- sprintf("S%03d", seq_len(nrow(meta)))
+    meta <- meta[, c("SampleID", "SubjectID", "Day")]
+    meta <- meta[-c(3, 9, 15, 21, 27, 33, 39, 45), ]
+
+    taxa <- paste0("Genus_", LETTERS[1:2])
+    counts <- matrix(
+        rpois(length(taxa) * nrow(meta), 300),
+        nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
+    )
+
+    run <- suppressWarnings(tti_run(
+        counts, meta,
+        sample_col = "SampleID", subject_col = "SubjectID",
+        time_col = "Day", K = 1, verbose = FALSE
+    ))
+
+    sp <- unique(run$fit$pred_long$species)[1]
+    cells <- sum(run$fit$pred_long$species == sp)
+    pages <- suppressWarnings(TaxaTimeImpute:::tti_taxon_pages(
+        run$fit, sp, run$design, isTRUE(run$fit$use_outliers)
+    ))
+
+    # Eight values at six facets a page: two pages, and none dropped.
+    expect_equal(cells, 8)
+    expect_equal(length(pages), ceiling(cells / 6))
+})
+
+test_that("a large page count is warned about, not silently produced", {
+    expect_warning(
+        TaxaTimeImpute:::tti_warn_page_count(833, 45),
+        "plots = FALSE"
+    )
+    expect_no_warning(TaxaTimeImpute:::tti_warn_page_count(10, 2))
 })

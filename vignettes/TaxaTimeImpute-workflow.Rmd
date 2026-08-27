@@ -151,10 +151,7 @@ data. Each page shows every value imputed for one taxon with its interval, so
 a taxon whose gaps rest on very little information declares itself:
 
 ```{r unc}
-unc <- TaxaTimeImpute:::tti_taxon_uncertainty(
-    run$fit, run$fit$pred_long$species[1], run$design
-)
-unc
+tti_uncertainty(run, rownames(demo$counts)[1])
 ```
 
 `plots = FALSE` turns the drawing off. `plot_format = "png"` (or `"both"`)

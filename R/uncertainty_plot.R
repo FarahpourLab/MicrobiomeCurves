@@ -4,48 +4,6 @@
 # readable on its own, and the file as a whole is the thing to look at before
 # treating imputed values as data.
 
-#' Draw the uncertainty of one taxon's imputed values
-#'
-#' @param unc Data frame from [tti_taxon_uncertainty()].
-#' @param species_name Character name of the taxon, used in the title.
-#'
-#' @return A `ggplot` object.
-#'
-#' @keywords internal
-#' @noRd
-tti_plot_uncertainty <- function(unc, species_name) {
-    unc$label <- paste0(unc$subject, " @ ", unc$time_label)
-    unc <- unc[order(unc$subject, unc$time, method = "radix"), ]
-    unc$label <- factor(unc$label, levels = unc$label)
-
-    n_wide <- sum(!is.na(unc$se))
-    sub <- if (n_wide == 0) {
-        "no interval could be computed for these cells"
-    } else {
-        paste0(
-            nrow(unc), " imputed value(s); bars are 95% analytic intervals"
-        )
-    }
-
-    ggplot2::ggplot(
-        unc,
-        ggplot2::aes(x = .data$label, y = .data$imputed)
-    ) +
-        ggplot2::geom_errorbar(
-            ggplot2::aes(ymin = .data$lower, ymax = .data$upper),
-            width = 0.2, na.rm = TRUE
-        ) +
-        ggplot2::geom_point(size = 2, na.rm = TRUE) +
-        ggplot2::labs(
-            title = species_name, subtitle = sub,
-            x = NULL, y = "imputed value (CLR)"
-        ) +
-        ggplot2::theme_minimal() +
-        ggplot2::theme(
-            axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)
-        )
-}
-
 #' Write one uncertainty page per taxon
 #'
 #' @description
@@ -69,22 +27,27 @@ tti_write_uncertainty <- function(run, out_dir, dpi, format, say) {
     if (length(taxa) == 0) {
         return(NULL)
     }
+    use_outliers <- isTRUE(run$fit$use_outliers)
 
+    n_cells <- sum(run$fit$pred_long$species == taxa[1])
+    tti_warn_page_count(length(taxa), n_cells)
     say("Drawing uncertainty for ", length(taxa), " taxa ...")
 
-    # Working out an interval refits the same FPCA models the run already
-    # fitted, so the engine repeats the notes it made then. Those were
-    # reported in aggregate at the end of the fit; repeating them once per
-    # taxon here would say nothing new and bury the console.
-    plots <- withCallingHandlers(
-        lapply(taxa, function(sp) {
-            unc <- tti_taxon_uncertainty(run$fit, sp, run$design)
-            if (is.null(unc)) NULL else tti_plot_uncertainty(unc, sp)
-        }),
+    # Working out a band refits the same FPCA models the run already fitted,
+    # so the engine repeats the notes it made then. Those were reported in
+    # aggregate at the end of the fit; repeating them per taxon here would
+    # say nothing new and bury the console.
+    named <- withCallingHandlers(
+        {
+            pages <- lapply(taxa, function(sp) {
+                tti_taxon_pages(run$fit, sp, run$design, use_outliers)
+            })
+            stats::setNames(pages, taxa)
+        },
         warning = function(w) invokeRestart("muffleWarning")
     )
-    named <- stats::setNames(plots, taxa)
-    named <- named[!vapply(named, is.null, logical(1))]
+
+    named <- tti_flatten_pages(named)
     if (length(named) == 0) {
         return(NULL)
     }
@@ -95,6 +58,30 @@ tti_write_uncertainty <- function(run, out_dir, dpi, format, say) {
     }
     if (format %in% c("png", "both")) {
         out <- c(out, tti_uncertainty_png(named, out_dir, dpi))
+    }
+    out
+}
+
+#' Flatten per-taxon page lists into one named list of pages
+#'
+#' @param pages Named list, one entry per taxon, each a list of plots.
+#'
+#' @return A named list of plots. A taxon with one imputed value keeps its
+#'   own name; one with several gets a suffix per value.
+#'
+#' @keywords internal
+#' @noRd
+tti_flatten_pages <- function(pages) {
+    out <- list()
+    for (sp in names(pages)) {
+        ps <- pages[[sp]]
+        if (length(ps) == 0) next
+        nms <- if (length(ps) == 1) {
+            sp
+        } else {
+            paste0(sp, "_", seq_along(ps))
+        }
+        out[nms] <- ps
     }
     out
 }

@@ -251,7 +251,8 @@ tti_fit <- function(prep, K = NULL,
     tti_warn_unimputed(pred_long)
 
     tti_fit_result(
-        dat, dat_orig, prep, ft, pred_long, K, cluster_method, seed
+        dat, dat_orig, prep, ft, pred_long, K, cluster_method,
+        use_outliers, seed
     )
 }
 
@@ -264,6 +265,7 @@ tti_fit <- function(prep, K = NULL,
 #' @param pred_long Prediction table carrying the squared errors.
 #' @param K Integer or `NULL`, the requested number of clusters.
 #' @param cluster_method Character, the clustering route that was used.
+#' @param use_outliers Logical, whether trajectories were screened.
 #' @param seed Integer random seed.
 #'
 #' @return An object of class `tti_fit`.
@@ -271,7 +273,7 @@ tti_fit <- function(prep, K = NULL,
 #' @keywords internal
 #' @noRd
 tti_fit_result <- function(dat, dat_orig, prep, ft, pred_long, K,
-                           cluster_method, seed) {
+                           cluster_method, use_outliers, seed) {
     structure(
         c(
             list(dat = dat, dat_orig = dat_orig),
@@ -279,7 +281,8 @@ tti_fit_result <- function(dat, dat_orig, prep, ft, pred_long, K,
             list(
                 clusters = ft$clusters, pred_long = pred_long,
                 K = K, cluster_method = cluster_method,
-                outliers = ft$outliers, seed = seed
+                outliers = ft$outliers, use_outliers = use_outliers,
+                seed = seed
             )
         ),
         class = "tti_fit"
