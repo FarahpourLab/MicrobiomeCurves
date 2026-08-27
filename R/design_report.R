@@ -117,18 +117,19 @@ tti_report_thin <- function(design, say) {
 #'     c(1.2, 0.4, 1.5, 0.6, 1.1, 0.5),
 #'     nrow = 2,
 #'     dimnames = list(
-#'         c("Bacteroides", "Prevotella"),
-#'         c("RUN_0031", "RUN_0044", "RUN_0052")
+#'         c("Bacteroides", "Faecalibacterium"),
+#'         c("S001", "S002", "S003")
 #'     )
 #' )
 #' meta <- data.frame(
-#'     library = c("RUN_0031", "RUN_0044", "RUN_0052"),
-#'     animal = c("M01", "M01", "M02"),
-#'     day = c(0, 7, 0)
+#'     SampleID = c("S001", "S002", "S003"),
+#'     SubjectID = c("SUB01", "SUB01", "SUB02"),
+#'     Day = c(0, 7, 0)
 #' )
 #' design <- tti_from_metadata(
 #'     counts, meta,
-#'     sample_col = "library", subject_col = "animal", time_col = "day",
+#'     sample_col = "SampleID", subject_col = "SubjectID",
+#'     time_col = "Day",
 #'     verbose = FALSE
 #' )
 #' design

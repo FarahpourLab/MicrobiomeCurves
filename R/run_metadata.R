@@ -31,9 +31,11 @@
 #' @noRd
 tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
                                   time_col, abundance_type, pseudocount,
-                                  out_dir, K, cluster_method, use_outliers,
+                                  out_dir, plots, dpi, plot_format,
+                                  K, cluster_method, use_outliers,
                                   seed, min_observed, verbose) {
     tti_check_meta_args(sample_col, subject_col, time_col)
+    tti_check_dpi(dpi)
 
     seen <- new.env(parent = emptyenv())
     seen$warned <- character(0)
@@ -68,14 +70,41 @@ tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
     tti_replay_warnings(warned)
 
     if (!is.null(out_dir)) {
-        run$files <- tti_write_output(run, out_dir, warned)
-        if (isTRUE(verbose)) {
-            message(
-                "Wrote ", paste(basename(run$files), collapse = " and "),
-                " to ", out_dir
-            )
-        }
+        run <- tti_emit_output(run, out_dir, warned, plots, dpi,
+                               plot_format, verbose)
     }
+    run
+}
+
+#' Write everything a finished run has to offer
+#'
+#' @param run The `tti_run` object.
+#' @param out_dir Directory to write into.
+#' @param warned Character vector of warnings raised during the run.
+#' @param plots Logical. Whether to draw per-taxon uncertainty.
+#' @param dpi Resolution for PNG output.
+#' @param plot_format One of `"pdf"`, `"png"` or `"both"`.
+#' @param verbose Logical. Whether to report what was written.
+#'
+#' @return `run`, with `files` listing everything written.
+#'
+#' @keywords internal
+#' @noRd
+tti_emit_output <- function(run, out_dir, warned, plots, dpi, plot_format,
+                            verbose) {
+    say <- function(...) if (isTRUE(verbose)) message(...)
+
+    files <- tti_write_output(run, out_dir, warned)
+    if (isTRUE(plots)) {
+        files <- c(
+            files,
+            tti_write_uncertainty(run, out_dir, dpi, plot_format, say)
+        )
+    }
+
+    run$files <- files
+    say("Wrote ", length(files), " file(s) to ", out_dir, ": ",
+        tti_fmt_some(basename(files), n = 6))
     run
 }
 

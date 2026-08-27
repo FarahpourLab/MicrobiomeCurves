@@ -35,55 +35,68 @@ itself requires, and nothing is downloaded during installation.
 ## Quick start
 
 Give it the two tables a study already has: an abundance table with **taxa in
-the row names** and one column per sample, and a metadata sheet saying which
+the row names** and one column per sample, and a sample sheet saying which
 sample came from which subject at which time. You name the three metadata
-columns, so they can be called anything.
+columns, so they can be called whatever your sheet already calls them.
 
 ```r
 library(TaxaTimeImpute)
 
 counts    # taxa in row names, one column per sample
-#>             RUN_0031 RUN_0044 RUN_0052 RUN_0067
-#> Bacteroides       12       15       10       13
-#> Prevotella         4        6        5        7
-#> Akkermansia        9       11        8       10
+#>                    S001 S002 S003 S004 S005
+#> Bacteroides         412  380  455  501  366
+#> Faecalibacterium    198  221  176  205  240
+#> Bifidobacterium      87   64  103   58   77
+#> Akkermansia          33   41   28   35   44
 
 meta      # one row per sample
-#>    library animal day
-#> 1 RUN_0031    M01   0
-#> 2 RUN_0044    M01   7
-#> 3 RUN_0052    M02   0
-#> 4 RUN_0067    M02   7
+#>   SampleID SubjectID Day
+#> 1     S001     SUB01   0
+#> 2     S002     SUB01   7
+#> 3     S003     SUB01  14
+#> 4     S004     SUB02   0
+#> 5     S005     SUB02   7
 
 run <- tti_run(
     counts, meta,
-    sample_col     = "library",
-    subject_col    = "animal",
-    time_col       = "day",
-    abundance_type = "raw",       # counts; use "clr" if already transformed
+    sample_col     = "SampleID",
+    subject_col    = "SubjectID",
+    time_col       = "Day",
+    abundance_type = "raw",   # counts; use "clr" if already transformed
     out_dir        = "results",
-    K = 1
+    K = 1                     # pool all subjects when fitting each taxon;
+                              # K = NULL groups similar trajectories instead
+                              # and picks how many groups per taxon
 )
 #> Transforming raw abundances to centred log-ratios.
-#> Design: 8 taxa, 23 samples, 6 subjects, 4 time points.
-#>   time points, in order: baseline (1), week1 (2), week4 (3), week8 (4)
-#>   missing: 2 of 24 subject-timepoints (8.3%).
-#>     1 with no sample at all: M03 at week4
-#>     1 whose sample column is entirely NA: M04 at week4
-#> Wrote imputed_abundance.tsv and imputation_log.txt to results
+#> Design: 120 taxa, 58 samples, 20 subjects, 3 time points.
+#>   time points, in order: 0, 7, 14
+#>   missing: 2 of 60 subject-timepoints (3.3%).
+#>     1 with no sample at all: SUB07 at 14
+#>     1 whose sample column is entirely NA: SUB13 at 7
+#> Drawing uncertainty for 120 taxa ...
+#> Wrote 3 file(s) to results: imputed_abundance.tsv, imputation_log.txt,
+#>   uncertainty_by_taxon.pdf
 ```
 
-Nothing is encoded in a column name. `subject` is whatever the repeated
-measurements were taken on — a mouse, a participant, a plot, a bioreactor.
+Nothing is encoded in a column name. `SubjectID` identifies whatever the
+repeated measurements were taken on — a participant, a mouse, a plot, a
+bioreactor.
 
 **Time** may be numbers, in which case the real spacing is used, or labels
-such as `"baseline"`, `"week1"`, `"week4"`. Labels are placed in order at
+such as `"Baseline"`, `"Week1"`, `"Week4"`. Labels are placed in order at
 equal spacing, taken from the factor's levels if it is a factor and from the
 row order otherwise. That is reported, because the spacing changes the fit.
 
 **Abundances** may be raw counts or relative abundances
-(`abundance_type = "raw"`, CLR-transformed for you, zeros replaced), or
+(`abundance_type = "raw"`, CLR-transformed for you with zeros replaced), or
 values you have already transformed (`abundance_type = "clr"`).
+
+**`K`** controls how subjects are grouped before a value is imputed. `K = 1`
+pools every subject, which is the fastest and the usual starting point.
+`K = NULL` clusters similar trajectories per taxon and chooses the number of
+clusters by silhouette width, which helps when subjects fall into distinct
+response patterns but takes considerably longer.
 
 ### What you get back
 
@@ -92,18 +105,26 @@ time. Observed values are unchanged. A column is added only for a
 subject-timepoint that had no sample; it is named from its subject and time,
 and `run$metadata` marks it `imputed = TRUE`.
 
-With `out_dir`, two files are written:
+With `out_dir`, the run writes:
 
-- `imputed_abundance.tsv` — the completed table
-- `imputation_log.txt` — the time points in order, the counts of samples,
-  subjects and time points, every subject-timepoint that was missing and
-  why, and every warning raised
+| file | contents |
+| --- | --- |
+| `imputed_abundance.tsv` | the completed table |
+| `imputation_log.txt` | the design, time points in order, every missing subject-timepoint and why, and every warning raised |
+| `uncertainty_by_taxon.pdf` | one page per taxon, each imputed value with its 95% interval |
 
 ```
-MISSING (2 of 24 subject-timepoints)
-  M03  at time week4  [absent_sample]  no sample was collected
-  M04  at time week4  [no_data]  sample RUN_0016
+MISSING (2 of 60 subject-timepoints)
+  SUB07  at time 14  [absent_sample]  no sample was collected
+  SUB13  at time 7   [no_data]  sample S038
 ```
+
+The uncertainty pages are the thing to look at before treating imputed
+values as data: a taxon whose gaps rest on very little information shows wide
+intervals, and says so on its own page. Turn them off with `plots = FALSE`.
+For raster copies, `plot_format = "png"` (or `"both"`) writes one image per
+taxon at `dpi`, which defaults to 300; the PDF is vector and is sharp at any
+size, so `dpi` does not apply to it.
 
 Everything written is also returned, in `run$design` and `run$missing`, so
 nothing is available only on screen. To inspect a design without fitting,

@@ -44,6 +44,8 @@ Imports:
     fda.usc,
     fdapace,
     ggplot2,
+    grDevices,
+    grid,
     magrittr,
     methods,
     patchwork,

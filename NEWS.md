@@ -21,10 +21,15 @@ First submission to Bioconductor.
 * Abundances may be raw counts or relative abundances
   (`abundance_type = "raw"`), which are CLR-transformed on the way in with
   zeros replaced, or values already transformed (`abundance_type = "clr"`).
-* `out_dir` writes two files: `imputed_abundance.tsv`, the completed table,
-  and `imputation_log.txt`, recording the design, the time points in order,
-  the counts of samples, subjects and time points, every subject-timepoint
-  that was missing and why, and every warning raised.
+* `out_dir` writes the results: `imputed_abundance.tsv`, the completed
+  table; `imputation_log.txt`, recording the design, the time points in
+  order, the counts of samples, subjects and time points, every
+  subject-timepoint that was missing and why, and every warning raised; and
+  `uncertainty_by_taxon.pdf`, one page per taxon showing each imputed value
+  with its 95% analytic interval, so a taxon whose gaps rest on little
+  information is visible rather than buried in the table. `plots = FALSE`
+  turns the drawing off, and `plot_format = "png"` or `"both"` writes one
+  image per taxon at `dpi`, which defaults to 300.
 * Results come back under the caller's own sample names, ordered by subject
   and then time, in both `completed` and the long `imputed` table. A column
   created for a subject-timepoint that had no sample is named from its

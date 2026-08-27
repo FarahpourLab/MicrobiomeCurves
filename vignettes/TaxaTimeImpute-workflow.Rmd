@@ -125,10 +125,13 @@ run <- tti_run(
 
 ## Writing results to disk
 
-Give `out_dir` and the run writes two files: `imputed_abundance.tsv`, the
-completed table, and `imputation_log.txt`, a record of the design, the time
-points in order, every subject-timepoint that was missing and why, and every
-warning raised.
+Give `out_dir` and the run writes three things:
+
+| file | contents |
+| --- | --- |
+| `imputed_abundance.tsv` | the completed table |
+| `imputation_log.txt` | design, time order, gaps, warnings |
+| `uncertainty_by_taxon.pdf` | one page per taxon, with intervals |
 
 ```{r outdir}
 out <- file.path(tempdir(), "tti_example")
@@ -142,6 +145,21 @@ basename(run$files)
 cat(head(readLines(file.path(out, "imputation_log.txt")), 12), sep = "
 ")
 ```
+
+The uncertainty pages are what to look at before treating imputed values as
+data. Each page shows every value imputed for one taxon with its interval, so
+a taxon whose gaps rest on very little information declares itself:
+
+```{r unc}
+unc <- TaxaTimeImpute:::tti_taxon_uncertainty(
+    run$fit, run$fit$pred_long$species[1], run$design
+)
+unc
+```
+
+`plots = FALSE` turns the drawing off. `plot_format = "png"` (or `"both"`)
+writes one image per taxon at `dpi`, which defaults to 300; the PDF is vector
+art and stays sharp at any size, so `dpi` does not apply to it.
 
 Results come back under your own sample names, ordered by subject and then
 time:

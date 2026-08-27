@@ -357,8 +357,10 @@ test_that("out_dir writes the completed table and a run log", {
         out_dir = out, K = 1, verbose = FALSE
     ))
 
-    expect_length(run$files, 2)
+    # table, log, and one uncertainty PDF
+    expect_length(run$files, 3)
     expect_true(all(file.exists(run$files)))
+    expect_true(any(grepl("uncertainty_by_taxon[.]pdf$", run$files)))
 
     tsv <- read.delim(file.path(out, "imputed_abundance.tsv"),
         check.names = FALSE
@@ -396,4 +398,65 @@ test_that("the log records label time points as the user wrote them", {
     expect_true(any(grepl("at time visit7", log)))
 
     unlink(out, recursive = TRUE)
+})
+
+test_that("uncertainty plotting can be turned off and switched to png", {
+    s <- study(drop = list("M03", 7))
+    out <- file.path(tempdir(), "tti_plots_off")
+    unlink(out, recursive = TRUE)
+
+    off <- suppressWarnings(tti_run(
+        s$abundance, s$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "day",
+        out_dir = out, plots = FALSE, K = 1, verbose = FALSE
+    ))
+    expect_length(off$files, 2)
+    expect_false(any(grepl("uncertainty", off$files)))
+    unlink(out, recursive = TRUE)
+
+    png_out <- file.path(tempdir(), "tti_plots_png")
+    unlink(png_out, recursive = TRUE)
+    both <- suppressWarnings(tti_run(
+        s$abundance, s$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "day",
+        out_dir = png_out, plot_format = "png", dpi = 150,
+        K = 1, verbose = FALSE
+    ))
+    pngs <- list.files(file.path(png_out, "uncertainty_png"), pattern = "png$")
+    expect_length(pngs, length(s$taxa))
+    unlink(png_out, recursive = TRUE)
+})
+
+test_that("dpi is validated", {
+    s <- study(drop = list("M03", 7))
+    expect_error(
+        tti_run(
+            s$abundance, s$metadata,
+            sample_col = "sample", subject_col = "subject",
+            time_col = "day", out_dir = tempdir(), dpi = -1,
+            K = 1, verbose = FALSE
+        ),
+        "dpi must be"
+    )
+})
+
+test_that("every imputed cell gets an interval, screened-out subjects too", {
+    demo <- tti_demo_data()
+    run <- suppressWarnings(tti_run(
+        demo$counts, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        K = 1, verbose = FALSE
+    ))
+
+    unc <- do.call(rbind, lapply(
+        unique(run$fit$pred_long$species),
+        function(sp) tti_taxon_uncertainty(run$fit, sp, run$design)
+    ))
+
+    expect_equal(nrow(unc), nrow(run$fit$pred_long))
+    # A subject dropped by outlier screening is absent from the stored
+    # clustering, but it was still imputed, so it still gets an interval.
+    expect_false(anyNA(unc$se))
+    expect_true(all(unc$lower <= unc$imputed))
+    expect_true(all(unc$upper >= unc$imputed))
 })
