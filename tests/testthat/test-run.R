@@ -20,26 +20,25 @@ test_that("observed values are never overwritten", {
             info = paste("column", cl, "was modified")
         )
     }
-    expect_identical(run$completed$OTU_ID, taxa_demo$OTU_ID)
+    expect_identical(run$completed$taxon, taxa_demo$OTU_ID)
 })
 
 test_that("the completed table keeps the input layout", {
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
 
-    # same rows, original columns in their original order, new column appended
+    # Same rows; every observed sample comes back under its own name, and
+    # the absent one is added under a name built from its subject and time.
     expect_equal(nrow(run$completed), nrow(taxa_demo))
-    expect_equal(
-        names(run$completed)[seq_along(names(taxa_demo))],
-        names(taxa_demo)
-    )
-    expect_true("S04.2" %in% names(run$completed))
-    expect_false("S04.2" %in% names(taxa_demo))
+    observed <- setdiff(names(taxa_demo), "OTU_ID")
+    expect_true(all(observed %in% names(run$completed)))
+    expect_true("S04_2" %in% names(run$completed))
+    expect_false("S04_2" %in% names(taxa_demo))
 })
 
 test_that("previously missing cells come back populated", {
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
 
-    for (cl in c("S02.1", "S07.4", "S04.2")) {
+    for (cl in c("S02.1", "S07.4", "S04_2")) {
         expect_false(anyNA(run$completed[[cl]]), info = paste("column", cl))
         expect_type(run$completed[[cl]], "double")
     }
@@ -65,7 +64,7 @@ test_that("tti_run warns about subjects with too few observations", {
 
     w <- character()
     withCallingHandlers(
-        tti_run(dat, taxon_col = "OTU_ID", K = 1, min_observed = 4,
+        run_wide_as_meta(dat, K = 1, min_observed = 4,
             verbose = FALSE),
         warning = function(x) {
             w <<- c(w, conditionMessage(x))
@@ -137,7 +136,7 @@ test_that("a subject with no observations falls back to the population mean", {
         for (tt in 0:3) {
             vals <- imp$imputed_value[
                 imp$species == taxon & imp$time == tt &
-                    imp$rep %in% c("S1", "S2")
+                    imp$subject %in% c("S1", "S2")
             ]
             expect_equal(length(vals), 2)
             expect_equal(vals[1], vals[2], tolerance = 1e-10)
@@ -156,13 +155,13 @@ test_that("tti_run adds no logic of its own", {
     prep <- tti_prepare(
         dat = dat_full,
         taxon_col = "OTU_ID",
-        mask_list = run$missing[, c("rep", "time")]
+        mask_list = run$missing[, c("subject", "time")]
     )
     manual <- tti_impute(quiet_fit(prep, K = 1, seed = 42))
 
     expect_equal(run$imputed$imputed_value, manual$imputed_value)
     expect_equal(run$imputed$species, manual$species)
-    expect_equal(run$imputed$rep, manual$rep)
+    expect_equal(run$imputed$subject, manual$rep)
     expect_equal(run$imputed$time, manual$time)
 })
 

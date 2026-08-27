@@ -10,13 +10,14 @@ tti_from_metadata(
   sample_col,
   subject_col,
   time_col,
-  taxon_col = NULL,
+  abundance_type = c("clr", "raw"),
+  pseudocount = "auto",
   verbose = TRUE
 )
 }
 \arguments{
-\item{abundance}{A data.frame or matrix with taxa in rows and samples in
-columns. Sample names are taken from the column names.}
+\item{abundance}{A data.frame or matrix with taxa in the \strong{row names} and
+one column per sample. Column names are the sample identifiers.}
 
 \item{metadata}{A data.frame with one row per sample.}
 
@@ -27,18 +28,27 @@ identifiers. These must match the columns of \code{abundance}.}
 subject each sample was taken from.}
 
 \item{time_col}{Character name of the metadata column holding the time
-point. Values must be numeric or coercible to numeric.}
+point. Numbers are used as they stand. Labels such as \code{"baseline"} and
+\code{"week1"} are placed in order at equal spacing, taking the order from
+the factor's levels if it is a factor and from the order the rows appear
+otherwise; this is reported, because the spacing changes the fit.}
 
-\item{taxon_col}{Character name of the column of \code{abundance} holding taxon
-identifiers, or \code{NULL} (the default) to take them from the row names.}
+\item{abundance_type}{Either \code{"clr"}, meaning the values are already
+centred log-ratios, or \code{"raw"}, meaning counts or relative abundances to
+be CLR-transformed here.}
+
+\item{pseudocount}{Used only when \code{abundance_type = "raw"}. Either
+\code{"auto"}, replacing zeros per sample with a fraction of that sample's
+smallest non-zero value, or a single positive number added to every
+entry.}
 
 \item{verbose}{Logical. Whether to report the design as it is built.}
 }
 \value{
 An object of class \code{tti_design}: a list with the converted
 \code{table}, the \code{map} from internal column names back to sample names, the
-\code{metadata} extended with any subject-timepoint that has no sample,
-\code{missing}, \code{observed}, \code{subjects}, \code{times} and \code{taxon_col}.
+\code{metadata}, \code{missing}, \code{observed}, \code{subjects}, \code{times}, the time \code{axis}
+and \code{taxon_col}.
 }
 \description{
 Takes data in the form a study produces — an abundance table with taxa in
@@ -56,20 +66,24 @@ with no sample at all, which is discovered from the grid of subjects
 against time points.
 }
 \examples{
-counts <- data.frame(
-    taxon = c("Bacteroides", "Prevotella"),
-    S1 = c(1.2, 0.4), S2 = c(1.5, 0.6), S3 = c(1.1, 0.5)
+counts <- matrix(
+    c(12, 4, 9, 15, 6, 11, 10, 5, 8),
+    nrow = 3,
+    dimnames = list(
+        c("Bacteroides", "Prevotella", "Akkermansia"),
+        c("RUN_0031", "RUN_0044", "RUN_0052")
+    )
 )
 meta <- data.frame(
-    sample = c("S1", "S2", "S3"),
-    mouse = c("M01", "M01", "M02"),
+    library = c("RUN_0031", "RUN_0044", "RUN_0052"),
+    animal = c("M01", "M01", "M02"),
     day = c(0, 7, 0)
 )
 
 design <- tti_from_metadata(
     counts, meta,
-    sample_col = "sample", subject_col = "mouse", time_col = "day",
-    taxon_col = "taxon"
+    sample_col = "library", subject_col = "animal", time_col = "day",
+    abundance_type = "raw"
 )
 design$missing
 

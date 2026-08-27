@@ -119,7 +119,7 @@ test_that("the documented mask_list forms both work", {
 test_that("tti_metrics warns when there is no truth to score against", {
     b <- demo_bits()
     run <- suppressWarnings(
-        tti_run(b$dat, "OTU_ID", K = 1, verbose = FALSE)
+        run_wide_as_meta(b$dat, K = 1, verbose = FALSE)
     )
     expect_warning(
         m <- tti_metrics(run$fit),
@@ -154,7 +154,7 @@ test_that("a partly measured sample stops the run on every path", {
         "only partly measured"
     )
     expect_error(
-        tti_run(partial, "OTU_ID", K = 1, verbose = FALSE),
+        run_wide_as_meta(partial, K = 1, verbose = FALSE),
         "only partly measured"
     )
 })

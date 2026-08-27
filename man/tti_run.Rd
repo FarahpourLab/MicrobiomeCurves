@@ -3,6 +3,7 @@
 \name{tti_run}
 \alias{tti_run}
 \alias{tti_run,data.frame-method}
+\alias{tti_run,matrix-method}
 \alias{tti_run,SummarizedExperiment-method}
 \title{Impute missing timepoints in a longitudinal microbiome table}
 \usage{
@@ -10,18 +11,35 @@ tti_run(dat, ...)
 
 \S4method{tti_run}{data.frame}(
   dat,
-  taxon_col = "OTU_ID",
-  metadata = NULL,
-  sample_col = NULL,
-  subject_col = NULL,
-  time_col = NULL,
+  metadata,
+  sample_col,
+  subject_col,
+  time_col,
+  abundance_type = c("clr", "raw"),
+  pseudocount = "auto",
+  out_dir = NULL,
   K = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
   seed = 123,
-  times = NULL,
-  parse_fun = NULL,
-  make_col = NULL,
+  min_observed = 2,
+  verbose = TRUE,
+  ...
+)
+
+\S4method{tti_run}{matrix}(
+  dat,
+  metadata,
+  sample_col,
+  subject_col,
+  time_col,
+  abundance_type = c("clr", "raw"),
+  pseudocount = "auto",
+  out_dir = NULL,
+  K = NULL,
+  cluster_method = c("fpca", "kmeans_fd"),
+  use_outliers = TRUE,
+  seed = 123,
   min_observed = 2,
   verbose = TRUE,
   ...
@@ -42,14 +60,8 @@ tti_run(dat, ...)
 \item{...}{Further arguments passed to the \code{data.frame} method of
 \code{\link[=tti_run]{tti_run()}}, such as \code{K}, \code{use_outliers}, \code{seed} and \code{verbose}.}
 
-\item{taxon_col}{Character. Name of the taxon identifier column. With
-\code{metadata} it may be \code{NULL}, in which case taxa are taken from
-the row names.}
-
-\item{metadata}{Optional data.frame with one row per sample, saying which
-subject each sample came from and when. Supplying it lets \code{dat}
-keep the study's own sample names, which are also used for the returned
-\code{completed} table. The three columns below must then be named.}
+\item{metadata}{A data.frame with one row per sample, saying which subject
+each sample came from and when.}
 
 \item{sample_col}{Character. Name of the \code{metadata} column holding
 sample identifiers, matching the columns of \code{dat}.}
@@ -61,6 +73,21 @@ identifiers.}
 Values must be numeric or coercible to numeric; they need not be integers
 or evenly spaced.}
 
+\item{abundance_type}{Either \code{"clr"}, meaning \code{dat} already
+holds centred log-ratios, or \code{"raw"}, meaning counts or relative
+abundances that are CLR-transformed here.}
+
+\item{pseudocount}{Used only when \code{abundance_type = "raw"}. Either
+\code{"auto"}, replacing zeros per sample with a fraction of that
+sample's smallest non-zero value, or a single positive number added to
+every entry.}
+
+\item{out_dir}{Optional directory to write results into. When given, the
+completed table is written as \code{imputed_abundance.tsv} and a record
+of the run as \code{imputation_log.txt}, holding the time points in
+order, the counts of samples, subjects and time points, every
+subject-timepoint that was missing and why, and any warning raised.}
+
 \item{K}{Integer or \code{NULL}. Number of trajectory clusters, passed
 straight to \code{\link{tti_fit}}. \code{NULL} selects K per taxon by mean
 silhouette width.}
@@ -71,12 +98,6 @@ silhouette width.}
 enables functional-depth outlier screening.}
 
 \item{seed}{Integer random seed, passed to \code{\link{tti_fit}}.}
-
-\item{times}{Optional numeric vector giving the intended time grid, passed
-to \code{\link{tti_detect_missing}}.}
-
-\item{parse_fun, make_col}{Optional column-name parser and builder, passed to
-\code{\link{tti_detect_missing}} and \code{\link{tti_prepare}}.}
 
 \item{min_observed}{Integer. Observation count below which a subject is
 flagged in a warning. Default \code{2}.}
@@ -92,15 +113,20 @@ Defaults to \code{"imputed"}.}
 \value{
 An object of class \code{"tti_run"}: a list with
 \itemize{
-\item \code{completed}: the input table with missing samples filled in.
-Original columns keep their order and their values; columns created for
-absent subject-timepoints are appended.
-\item \code{imputed}: long table of every imputed cell (taxon x subject x
-time) with \code{imputed_value} and \code{FPCA_used}.
-\item \code{missing}: what was detected as missing, and why.
-\item \code{observed}: observation count per subject.
-\item \code{n_failed}: number of cells FPCA could not impute (left
-\code{NA} in \code{completed}).
+\item \code{completed}: the completed table, under the caller's own
+sample names, ordered by subject and then time. Observed values are
+unchanged. A column is added only for a subject-timepoint that had no
+sample; it is named from its subject and time.
+\item \code{metadata}: the metadata with a row for each created sample,
+carrying \code{imputed = TRUE}, so imputed samples stay
+distinguishable from measured ones.
+\item \code{design}: the \code{tti_design} the run was built from.
+\item \code{imputed}: long table of every imputed cell.
+\item \code{missing}: what was missing, and why.
+\item \code{observed}: observed time-point count per subject.
+\item \code{n_failed}: number of cells FPCA could not impute.
+\item \code{warnings}: every warning raised during the run.
+\item \code{files}: the paths written, when \code{out_dir} was given.
 \item \code{fit}: the underlying \code{"tti_fit"} object.
 }
 
@@ -155,37 +181,36 @@ The input assay is never modified. Imputed values are placed in a new assay,
 so observed and imputed data stay distinguishable.
 }
 \examples{
-data(taxa_demo)
+# The bundled example in study form: taxa in the row names, samples named
+# however the study names them, and a metadata sheet.
+demo <- tti_demo_data()
 
-# A complete run on the bundled example data.
-# fdapace emits "time gap" notices on sparse designs; see ?taxa_demo.
-run <- suppressWarnings(
-    tti_run(taxa_demo, taxon_col = "OTU_ID", K = 1, verbose = FALSE)
-)
+demo$counts[1:3, 1:4]
+head(demo$metadata, 3)
 
-run
+run <- suppressWarnings(tti_run(
+    demo$counts, demo$metadata,
+    sample_col = "sample", subject_col = "subject", time_col = "time",
+    K = 1, verbose = FALSE
+))
 
-# the filled table, in the same layout as the input
-run$completed[1:4, 1:5]
-
-# every imputed cell, in long form
-head(run$imputed[, c("species", "rep", "time", "imputed_value")])
-
-# what was treated as missing
+# what was missing, and why
 run$missing
 
-# A real analysis starts from a file of your own. The bundled CSV stands
-# in for one here, and the result is written to a temporary directory.
-path <- system.file("extdata", "taxa_demo.csv", package = "TaxaTimeImpute")
-dat <- read.csv(path, check.names = FALSE)
+# results under the original sample names
+run$completed[1:3, 1:5]
 
-run2 <- suppressWarnings(
-    tti_run(dat, taxon_col = "OTU_ID", K = 1, verbose = FALSE)
-)
+# samples created for subject-timepoints that had none
+run$metadata[run$metadata$imputed, ]
 
-out <- file.path(tempdir(), "taxa_demo_imputed.csv")
-write.csv(run2$completed, out, row.names = FALSE)
-file.exists(out)
+# Writing the completed table and a record of the run to a directory.
+out <- file.path(tempdir(), "imputation")
+run2 <- suppressWarnings(tti_run(
+    demo$counts, demo$metadata,
+    sample_col = "sample", subject_col = "subject", time_col = "time",
+    out_dir = out, K = 1, verbose = FALSE
+))
+basename(run2$files)
 
 # Build a small TreeSummarizedExperiment from the bundled demo table.
 library(SummarizedExperiment)

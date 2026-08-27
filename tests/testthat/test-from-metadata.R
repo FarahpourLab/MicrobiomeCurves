@@ -6,9 +6,18 @@ study <- function(drop = NULL, blank = NULL) {
         subject = subjects, day = days,
         KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
     )
-    meta$sample <- paste0(meta$subject, "_d", meta$day)
-    meta <- meta[order(meta$subject, meta$day), c("sample", "subject", "day")]
-    if (!is.null(drop)) meta <- meta[meta$sample != drop, ]
+    meta <- meta[order(meta$subject, meta$day), ]
+    meta$sample <- sprintf("RUN_%04d", seq_len(nrow(meta)))
+    meta <- meta[, c("sample", "subject", "day")]
+    rownames(meta) <- NULL
+
+    pick <- function(sel) {
+        meta$sample[meta$subject == sel[[1]] & meta$day == sel[[2]]]
+    }
+    dropped <- if (!is.null(drop)) pick(drop) else NULL
+    blanked <- if (!is.null(blank)) pick(blank) else NULL
+
+    if (!is.null(dropped)) meta <- meta[meta$sample != dropped, ]
     rownames(meta) <- NULL
 
     taxa <- paste0("Taxon", sprintf("%02d", 1:4))
@@ -17,11 +26,12 @@ study <- function(drop = NULL, blank = NULL) {
         rnorm(length(taxa) * nrow(meta)),
         nrow = length(taxa), dimnames = list(taxa, meta$sample)
     )
-    if (!is.null(blank)) m[, blank] <- NA_real_
+    if (!is.null(blanked)) m[, blanked] <- NA_real_
 
     list(
-        abundance = data.frame(taxon = taxa, m, check.names = FALSE),
-        metadata = meta, taxa = taxa, subjects = subjects, days = days
+        abundance = m, metadata = meta, taxa = taxa,
+        subjects = subjects, days = days,
+        dropped = dropped, blanked = blanked
     )
 }
 
@@ -29,7 +39,7 @@ build <- function(s, ...) {
     tti_from_metadata(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
-        taxon_col = "taxon", verbose = FALSE, ...
+        verbose = FALSE, ...
     )
 }
 
@@ -43,7 +53,7 @@ test_that("a complete design reports nothing missing", {
 })
 
 test_that("a sample absent from the metadata is found from the grid", {
-    d <- build(study(drop = "M03_d7"))
+    d <- build(study(drop = list("M03", 7)))
     expect_equal(nrow(d$missing), 1)
     expect_equal(d$missing$subject, "M03")
     expect_equal(d$missing$time, 7)
@@ -52,14 +62,14 @@ test_that("a sample absent from the metadata is found from the grid", {
 })
 
 test_that("a sample whose column holds no data is reported separately", {
-    d <- build(study(blank = "M02_d14"))
+    d <- build(study(blank = list("M02", 14)))
     expect_equal(nrow(d$missing), 1)
     expect_equal(d$missing$reason, "no_data")
-    expect_equal(d$missing$sample, "M02_d14")
+    expect_equal(d$missing$sample, study(blank = list("M02", 14))$blanked)
 })
 
 test_that("both kinds of gap are found together", {
-    d <- build(study(drop = "M03_d7", blank = "M02_d14"))
+    d <- build(study(drop = list("M03", 7), blank = list("M02", 14)))
     expect_equal(nrow(d$missing), 2)
     expect_setequal(d$missing$reason, c("absent_sample", "no_data"))
 })
@@ -70,31 +80,52 @@ test_that("the metadata columns may be called anything", {
     d <- tti_from_metadata(
         s$abundance, s$metadata,
         sample_col = "Run_ID", subject_col = "cage_animal",
-        time_col = "hours_post_gavage", taxon_col = "taxon", verbose = FALSE
+        time_col = "hours_post_gavage", verbose = FALSE
     )
     expect_equal(nrow(d$map), 15)
 })
 
-test_that("taxa can come from row names instead of a column", {
+test_that("taxa are read from the row names", {
     s <- study()
-    ab <- s$abundance[, setdiff(names(s$abundance), "taxon")]
-    rownames(ab) <- s$taxa
-    d <- tti_from_metadata(
-        ab, s$metadata,
-        sample_col = "sample", subject_col = "subject", time_col = "day",
-        verbose = FALSE
-    )
+    d <- build(s)
     expect_equal(d$table$OTU_ID, s$taxa)
+})
+
+test_that("an abundance table without row names is refused", {
+    s <- study()
+    ab <- s$abundance
+    rownames(ab) <- NULL
+    expect_error(build(list(abundance = ab, metadata = s$metadata)),
+        "no row names"
+    )
+})
+
+test_that("duplicated taxon row names are refused", {
+    s <- study()
+    ab <- s$abundance
+    rownames(ab) <- c("A", "A", "B", "C")
+    expect_error(build(list(abundance = ab, metadata = s$metadata)),
+        "duplicated row names"
+    )
+})
+
+test_that("a non-numeric abundance column is refused", {
+    s <- study()
+    ab <- as.data.frame(s$abundance)
+    ab[[1]] <- as.character(ab[[1]])
+    expect_error(build(list(abundance = ab, metadata = s$metadata)),
+        "not numeric"
+    )
 })
 
 test_that("mismatches between the two tables are named", {
     s <- study()
     bad <- s$metadata
-    bad$sample <- sub("^M", "X", bad$sample)
+    bad$sample <- sub("^RUN", "XXX", bad$sample)
     expect_error(
         tti_from_metadata(s$abundance, bad,
             sample_col = "sample", subject_col = "subject",
-            time_col = "day", taxon_col = "taxon", verbose = FALSE
+            time_col = "day", verbose = FALSE
         ),
         "No sample name is shared"
     )
@@ -103,7 +134,7 @@ test_that("mismatches between the two tables are named", {
     expect_error(
         tti_from_metadata(s$abundance, short,
             sample_col = "sample", subject_col = "subject",
-            time_col = "day", taxon_col = "taxon", verbose = FALSE
+            time_col = "day", verbose = FALSE
         ),
         "not described in the metadata"
     )
@@ -114,7 +145,7 @@ test_that("a misnamed metadata column says which argument named it", {
     expect_error(
         tti_from_metadata(s$abundance, s$metadata,
             sample_col = "sample", subject_col = "mouse",
-            time_col = "day", taxon_col = "taxon", verbose = FALSE
+            time_col = "day", verbose = FALSE
         ),
         "subject_col"
     )
@@ -129,19 +160,42 @@ test_that("a subject sampled twice at one time is refused", {
     )
 })
 
-test_that("a non-numeric time column is refused", {
+test_that("label time points are accepted, in order, with a warning", {
     s <- study()
     s$metadata$day <- paste0("day", s$metadata$day)
-    expect_error(build(s), "not coercible to numeric")
+    expect_warning(
+        d <- build(s),
+        "placed in order at equal spacing"
+    )
+    # The order comes from the rows as written, and the labels survive.
+    expect_equal(d$axis$levels, c("day0", "day7", "day14"))
+    expect_equal(d$axis$positions, 1:3)
+    expect_false(d$axis$literal)
+})
+
+test_that("a factor time column takes its order from the levels", {
+    s <- study()
+    s$metadata$day <- factor(
+        paste0("day", s$metadata$day),
+        levels = c("day0", "day7", "day14")
+    )
+    expect_warning(d <- build(s), "factor")
+    expect_equal(d$axis$levels, c("day0", "day7", "day14"))
+})
+
+test_that("a time column with one distinct value is refused", {
+    s <- study()
+    s$metadata$day <- "only"
+    expect_error(build(s), "at least two")
 })
 
 test_that("tti_run returns the caller's sample names", {
-    s <- study(drop = "M03_d7", blank = "M02_d14")
+    s <- study(drop = list("M03", 7), blank = list("M02", 14))
     run <- suppressWarnings(tti_run(
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
-        taxon_col = "taxon", K = 1, verbose = FALSE
+        K = 1, verbose = FALSE
     ))
 
     cols <- setdiff(names(run$completed), "taxon")
@@ -155,12 +209,12 @@ test_that("tti_run returns the caller's sample names", {
 })
 
 test_that("observed values are not modified", {
-    s <- study(drop = "M03_d7")
+    s <- study(drop = list("M03", 7))
     run <- suppressWarnings(tti_run(
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
-        taxon_col = "taxon", K = 1, verbose = FALSE
+        K = 1, verbose = FALSE
     ))
     keep <- s$metadata$sample
     expect_equal(
@@ -170,23 +224,24 @@ test_that("observed values are not modified", {
 })
 
 test_that("completed columns are ordered by subject then time", {
-    s <- study(drop = "M03_d7")
+    s <- study(drop = list("M03", 7))
     run <- suppressWarnings(tti_run(
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
-        taxon_col = "taxon", K = 1, verbose = FALSE
+        K = 1, verbose = FALSE
     ))
     cols <- setdiff(names(run$completed), "taxon")
 
-    # The created sample sits between its neighbours in time, rather than
-    # being appended after every other subject.
-    m03 <- cols[grepl("^M03", cols)]
-    expect_equal(m03, c("M03_d0", "M03_7", "M03_d14"))
-
-    # Subjects stay in blocks, in their original order.
-    subj <- sub("_.*$", "", cols)
+    # Subjects stay in blocks of three, in their original order.
+    expect_equal(length(cols), 15)
+    subj <- run$metadata$subject[match(cols, run$metadata$sample)]
     expect_equal(subj, rep(paste0("M0", 1:5), each = 3))
+
+    # Within M03 the created sample sits between its neighbours in time,
+    # rather than being appended after every other subject.
+    tm <- run$metadata$time[match(cols, run$metadata$sample)]
+    expect_equal(tm[subj == "M03"], c(0, 7, 14))
 })
 
 test_that("metadata requires all three column arguments", {
@@ -198,13 +253,147 @@ test_that("metadata requires all three column arguments", {
 })
 
 test_that("the design reports itself when verbose", {
-    s <- study(drop = "M03_d7")
+    s <- study(drop = list("M03", 7))
     expect_message(
         tti_from_metadata(
             s$abundance, s$metadata,
             sample_col = "sample", subject_col = "subject",
-            time_col = "day", taxon_col = "taxon", verbose = TRUE
+            time_col = "day", verbose = TRUE
         ),
         "missing"
     )
+})
+
+test_that("the long table uses the caller's subject and sample names", {
+    s <- study(drop = list("M03", 7))
+    run <- suppressWarnings(tti_run(
+        s$abundance,
+        metadata = s$metadata, sample_col = "sample",
+        subject_col = "subject", time_col = "day",
+        K = 1, verbose = FALSE
+    ))
+
+    expect_true(all(c("subject", "sample", "time") %in% names(run$imputed)))
+    expect_false("rep" %in% names(run$imputed))
+    expect_true(all(run$imputed$subject %in% s$subjects))
+    expect_true(all(run$imputed$time %in% s$days))
+})
+
+test_that("tti_demo_data returns the bundled example in study form", {
+    demo <- tti_demo_data()
+
+    # Taxa in the row names, arbitrary sample names, one metadata row each.
+    expect_true(is.matrix(demo$counts))
+    expect_equal(rownames(demo$counts), taxa_demo$OTU_ID)
+    expect_equal(nrow(demo$metadata), ncol(demo$counts))
+    expect_setequal(demo$metadata$sample, colnames(demo$counts))
+    expect_false(any(grepl(".", colnames(demo$counts), fixed = TRUE)))
+
+    run <- suppressWarnings(tti_run(
+        demo$counts, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        K = 1, verbose = FALSE
+    ))
+    expect_s3_class(run, "tti_run")
+    expect_equal(nrow(run$missing), 3)
+})
+
+test_that("raw counts are CLR-transformed on the way in", {
+    s <- study()
+    counts <- round(exp(s$abundance) * 100)
+
+    clr_run <- build(list(abundance = counts, metadata = s$metadata))
+    raw_run <- tti_from_metadata(
+        counts, s$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "day",
+        abundance_type = "raw", verbose = FALSE
+    )
+
+    # Treating counts as CLR leaves them alone; asking for the transform
+    # centres each sample on zero.
+    obs <- setdiff(names(clr_run$table), "OTU_ID")
+    expect_gt(mean(as.matrix(clr_run$table[, obs])), 1)
+    expect_equal(
+        unname(colMeans(as.matrix(raw_run$table[, obs]))),
+        rep(0, length(obs)),
+        tolerance = 1e-8
+    )
+})
+
+test_that("zeros are replaced rather than producing infinities", {
+    s <- study()
+    counts <- round(exp(s$abundance) * 100)
+    counts[1, ] <- 0
+
+    d <- tti_from_metadata(
+        counts, s$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "day",
+        abundance_type = "raw", verbose = FALSE
+    )
+    obs <- setdiff(names(d$table), "OTU_ID")
+    expect_false(any(is.infinite(as.matrix(d$table[, obs]))))
+})
+
+test_that("a negative abundance is refused as raw", {
+    s <- study()
+    expect_error(
+        tti_from_metadata(
+            s$abundance, s$metadata,
+            sample_col = "sample", subject_col = "subject",
+            time_col = "day", abundance_type = "raw", verbose = FALSE
+        ),
+        "negative values"
+    )
+})
+
+test_that("out_dir writes the completed table and a run log", {
+    s <- study(drop = list("M03", 7))
+    out <- file.path(tempdir(), "tti_out_test")
+    unlink(out, recursive = TRUE)
+
+    run <- suppressWarnings(tti_run(
+        s$abundance, s$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "day",
+        out_dir = out, K = 1, verbose = FALSE
+    ))
+
+    expect_length(run$files, 2)
+    expect_true(all(file.exists(run$files)))
+
+    tsv <- read.delim(file.path(out, "imputed_abundance.tsv"),
+        check.names = FALSE
+    )
+    expect_equal(nrow(tsv), nrow(run$completed))
+    expect_equal(ncol(tsv), ncol(run$completed))
+
+    log <- readLines(file.path(out, "imputation_log.txt"))
+    expect_true(any(grepl("DESIGN", log)))
+    expect_true(any(grepl("time order", log)))
+    expect_true(any(grepl("MISSING", log)))
+    expect_true(any(grepl("M03", log)))
+    expect_true(any(grepl("WARNINGS", log)))
+
+    unlink(out, recursive = TRUE)
+})
+
+test_that("the log records label time points as the user wrote them", {
+    s <- study(drop = list("M03", 7))
+    s$metadata$day <- factor(
+        paste0("visit", s$metadata$day),
+        levels = c("visit0", "visit7", "visit14")
+    )
+    out <- file.path(tempdir(), "tti_out_labels")
+    unlink(out, recursive = TRUE)
+
+    suppressWarnings(tti_run(
+        s$abundance, s$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "day",
+        out_dir = out, K = 1, verbose = FALSE
+    ))
+
+    log <- readLines(file.path(out, "imputation_log.txt"))
+    expect_true(any(grepl("visit0", log)))
+    expect_true(any(grepl("at time visit7", log)))
+
+    unlink(out, recursive = TRUE)
 })

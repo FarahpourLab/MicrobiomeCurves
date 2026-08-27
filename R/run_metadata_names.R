@@ -21,7 +21,7 @@ tti_name_added <- function(cols, design) {
     ]
     time <- design$times[parsed$time + 1L]
 
-    base <- paste0(subject, "_", time)
+    base <- paste0(subject, "_", tti_time_label(design$axis, time))
     tti_make_distinct(base, design$map$sample)
 }
 
@@ -77,6 +77,9 @@ tti_extend_metadata <- function(design, added, labels) {
         sample = new_names,
         subject = design$subjects[as.integer(sub("^s", "", parsed$rep))],
         time = design$times[parsed$time + 1L],
+        time_label = tti_time_label(
+            design$axis, design$times[parsed$time + 1L]
+        ),
         imputed = rep(TRUE, length(added)),
         stringsAsFactors = FALSE
     )

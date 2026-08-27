@@ -18,19 +18,23 @@
 Print a design
 }
 \examples{
-counts <- data.frame(
-    taxon = c("Bacteroides", "Prevotella"),
-    S1 = c(1.2, 0.4), S2 = c(1.5, 0.6), S3 = c(1.1, 0.5)
+counts <- matrix(
+    c(1.2, 0.4, 1.5, 0.6, 1.1, 0.5),
+    nrow = 2,
+    dimnames = list(
+        c("Bacteroides", "Prevotella"),
+        c("RUN_0031", "RUN_0044", "RUN_0052")
+    )
 )
 meta <- data.frame(
-    sample = c("S1", "S2", "S3"),
-    mouse = c("M01", "M01", "M02"),
+    library = c("RUN_0031", "RUN_0044", "RUN_0052"),
+    animal = c("M01", "M01", "M02"),
     day = c(0, 7, 0)
 )
 design <- tti_from_metadata(
     counts, meta,
-    sample_col = "sample", subject_col = "mouse", time_col = "day",
-    taxon_col = "taxon", verbose = FALSE
+    sample_col = "library", subject_col = "animal", time_col = "day",
+    verbose = FALSE
 )
 design
 

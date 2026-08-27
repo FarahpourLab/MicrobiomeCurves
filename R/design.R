@@ -44,6 +44,7 @@ tti_build_design <- function(ab, md, say) {
         sample = colnames(ab$mat),
         subject = subject,
         time = time,
+        time_label = tti_time_label(md$axis, time),
         imputed = FALSE,
         stringsAsFactors = FALSE
     )
@@ -56,11 +57,14 @@ tti_build_design <- function(ab, md, say) {
         list(
             table = tab,
             map = map,
-            metadata = map[, c("sample", "subject", "time", "imputed")],
-            missing = tti_design_missing(empty, map, enc),
+            metadata = map[, c(
+                "sample", "subject", "time", "time_label", "imputed"
+            )],
+            missing = tti_design_missing(empty, map, enc, md$axis),
             observed = tti_design_observed(map, empty),
             subjects = enc$subjects,
             times = enc$times,
+            axis = md$axis,
             taxon_col = "OTU_ID"
         ),
         class = "tti_design"
@@ -98,13 +102,14 @@ tti_check_grid <- function(subject, time) {
 #' @param empty Logical vector, `TRUE` where a sample column holds no data.
 #' @param map The column map.
 #' @param enc List from [tti_encode_samples()].
+#' @param axis The time axis, so the label the user wrote is carried too.
 #'
-#' @return Data frame with `subject`, `time`, `reason` and `sample`, ordered
-#'   by subject then time.
+#' @return Data frame with `subject`, `time`, `time_label`, `reason` and
+#'   `sample`, ordered by subject then time.
 #'
 #' @keywords internal
 #' @noRd
-tti_design_missing <- function(empty, map, enc) {
+tti_design_missing <- function(empty, map, enc, axis) {
     no_data <- data.frame(
         subject = map$subject[empty], time = map$time[empty],
         reason = rep("no_data", sum(empty)),
@@ -127,6 +132,8 @@ tti_design_missing <- function(empty, map, enc) {
     )
 
     out <- rbind(no_data, absent)
+    out$time_label <- tti_time_label(axis, out$time)
+    out <- out[, c("subject", "time", "time_label", "reason", "sample")]
     if (nrow(out) == 0) {
         return(out)
     }

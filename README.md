@@ -34,65 +34,82 @@ itself requires, and nothing is downloaded during installation.
 
 ## Quick start
 
-Give it the two tables a study already has: an abundance table with taxa in
-rows and samples in columns, and a metadata sheet saying which sample came
-from which subject at which time. You name the three metadata columns, so
-they can be called anything.
+Give it the two tables a study already has: an abundance table with **taxa in
+the row names** and one column per sample, and a metadata sheet saying which
+sample came from which subject at which time. You name the three metadata
+columns, so they can be called anything.
 
 ```r
 library(TaxaTimeImpute)
 
-counts    # taxa in rows, one column per sample
-#>         taxon M01_d0 M01_d7 M02_d0 M02_d7
-#> 1 Bacteroides   1.20   1.51   0.98   1.14
-#> 2  Prevotella   0.41   0.62   0.55   0.47
+counts    # taxa in row names, one column per sample
+#>             RUN_0031 RUN_0044 RUN_0052 RUN_0067
+#> Bacteroides       12       15       10       13
+#> Prevotella         4        6        5        7
+#> Akkermansia        9       11        8       10
 
 meta      # one row per sample
-#>   sample subject day
-#> 1 M01_d0     M01   0
-#> 2 M01_d7     M01   7
-#> 3 M02_d0     M02   0
-#> 4 M02_d7     M02   7
+#>    library animal day
+#> 1 RUN_0031    M01   0
+#> 2 RUN_0044    M01   7
+#> 3 RUN_0052    M02   0
+#> 4 RUN_0067    M02   7
 
 run <- tti_run(
-    counts,
-    metadata    = meta,
-    sample_col  = "sample",
-    subject_col = "subject",
-    time_col    = "day",
-    taxon_col   = "taxon",
+    counts, meta,
+    sample_col     = "library",
+    subject_col    = "animal",
+    time_col       = "day",
+    abundance_type = "raw",       # counts; use "clr" if already transformed
+    out_dir        = "results",
     K = 1
 )
+#> Transforming raw abundances to centred log-ratios.
 #> Design: 8 taxa, 23 samples, 6 subjects, 4 time points.
-#>   time points: 0, 7, 14, 21
+#>   time points, in order: baseline (1), week1 (2), week4 (3), week8 (4)
 #>   missing: 2 of 24 subject-timepoints (8.3%).
-#>     1 with no sample at all: M03 at 14
-#>     1 whose sample column is entirely NA: M05 at 21
-
-head(run$completed)
+#>     1 with no sample at all: M03 at week4
+#>     1 whose sample column is entirely NA: M04 at week4
+#> Wrote imputed_abundance.tsv and imputation_log.txt to results
 ```
 
-`subject` is whatever the repeated measurements were taken on — a mouse, a
-participant, a plot, a bioreactor. Nothing in the package assumes a species.
+Nothing is encoded in a column name. `subject` is whatever the repeated
+measurements were taken on — a mouse, a participant, a plot, a bioreactor.
 
-The completed table comes back under your own sample names, ordered by
-subject and then time. Observed values are not modified. A column is added
-only for a subject-timepoint that had no sample at all; it is named from its
-subject and time, and `run$metadata` marks it `imputed = TRUE` so it stays
-distinguishable from a measured sample.
+**Time** may be numbers, in which case the real spacing is used, or labels
+such as `"baseline"`, `"week1"`, `"week4"`. Labels are placed in order at
+equal spacing, taken from the factor's levels if it is a factor and from the
+row order otherwise. That is reported, because the spacing changes the fit.
 
-Everything printed above is also returned, in `run$design`, so nothing is
-available only by reading the console. To inspect a design without fitting
-anything, `tti_from_metadata()` does the conversion and reporting on its own.
+**Abundances** may be raw counts or relative abundances
+(`abundance_type = "raw"`, CLR-transformed for you, zeros replaced), or
+values you have already transformed (`abundance_type = "clr"`).
 
-If your table already encodes subject and time in its column names as
-`"<subject>.<time>"`, omit `metadata` and the original interface still
-applies:
+### What you get back
 
-```r
-data(taxa_demo)
-run <- tti_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+`run$completed` carries your own sample names, ordered by subject and then
+time. Observed values are unchanged. A column is added only for a
+subject-timepoint that had no sample; it is named from its subject and time,
+and `run$metadata` marks it `imputed = TRUE`.
+
+With `out_dir`, two files are written:
+
+- `imputed_abundance.tsv` — the completed table
+- `imputation_log.txt` — the time points in order, the counts of samples,
+  subjects and time points, every subject-timepoint that was missing and
+  why, and every warning raised
+
 ```
+MISSING (2 of 24 subject-timepoints)
+  M03  at time week4  [absent_sample]  no sample was collected
+  M04  at time week4  [no_data]  sample RUN_0016
+```
+
+Everything written is also returned, in `run$design` and `run$missing`, so
+nothing is available only on screen. To inspect a design without fitting,
+`tti_from_metadata()` does the conversion and reporting alone.
+
+The bundled example is available in this form with `tti_demo_data()`.
 
 ## With SummarizedExperiment
 

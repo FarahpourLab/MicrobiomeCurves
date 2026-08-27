@@ -121,26 +121,16 @@ setMethod("tti_run", "SummarizedExperiment", function(
     tab <- data.frame(OTU_ID = taxa, stringsAsFactors = FALSE)
     tab[enc$label] <- as.data.frame(mat)
 
-    run <- tti_run(tab, taxon_col = "OTU_ID", ...)
+    # Subject and time come from colData, so the encoded layout is built
+    # here and goes straight to the fitting entry point.
+    run <- tti_run_wide(tab, taxon_col = "OTU_ID", ...)
 
-    completed <- run$completed
-    out_labels <- setdiff(colnames(completed), "OTU_ID")
-    added <- setdiff(out_labels, enc$label)
-
-    filled <- as.matrix(completed[, c(enc$label, added), drop = FALSE])
-    # taxa may be generated names when the object has no rownames, and the
-    # assay setter rejects dimnames that differ from the receiving object's.
-    # Mirroring the object keeps that case working.
-    rownames(filled) <- rownames(dat)
-
-    obj <- if (length(added) > 0) {
-        tti_se_append_samples(dat, cd, enc, added, subject_col, time_col, taxa)
-    } else {
-        dat
-    }
-
-    colnames(filled) <- colnames(obj)
-    SummarizedExperiment::assay(obj, name) <- filled
+    added <- setdiff(
+        setdiff(colnames(run$completed), "OTU_ID"), enc$label
+    )
+    obj <- tti_se_write_back(
+        dat, cd, run, enc, spec, subject_col, time_col, name
+    )
 
     S4Vectors::metadata(obj)$tti_run <- list(
         missing = run$missing,
@@ -212,6 +202,46 @@ tti_as_demo_se <- function() {
             row.names = grid$label
         )
     )
+}
+
+#' Write a completed table back into a SummarizedExperiment
+#'
+#' @param dat The object as supplied.
+#' @param cd Its `colData`.
+#' @param run The `tti_run` produced on the encoded table.
+#' @param enc List from [tti_encode_samples()].
+#' @param spec List from [tti_se_inputs()].
+#' @param subject_col,time_col Column names within `cd`.
+#' @param name Name for the new assay.
+#'
+#' @return The object with the completed matrix added as an assay, and any
+#'   sample that had to be created appended.
+#'
+#' @keywords internal
+#' @noRd
+tti_se_write_back <- function(dat, cd, run, enc, spec, subject_col, time_col,
+                              name) {
+    completed <- run$completed
+    out_labels <- setdiff(colnames(completed), "OTU_ID")
+    added <- setdiff(out_labels, enc$label)
+
+    filled <- as.matrix(completed[, c(enc$label, added), drop = FALSE])
+    # spec$taxa may be generated names when the object has no rownames, and
+    # the assay setter rejects dimnames that differ from the receiving
+    # object's. Mirroring the object keeps that case working.
+    rownames(filled) <- rownames(dat)
+
+    obj <- if (length(added) > 0) {
+        tti_se_append_samples(
+            dat, cd, enc, added, subject_col, time_col, spec$taxa
+        )
+    } else {
+        dat
+    }
+
+    colnames(filled) <- colnames(obj)
+    SummarizedExperiment::assay(obj, name) <- filled
+    obj
 }
 
 #' Validate a container and pull out what the table pipeline needs

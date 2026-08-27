@@ -10,7 +10,12 @@ utils::data("taxa_demo", package = "TaxaTimeImpute", envir = environment())
 
 quiet_fit <- function(...) suppressWarnings(tti_fit(...))
 
-quiet_run <- function(...) suppressWarnings(tti_run(..., verbose = FALSE))
+# tti_run() takes an abundance table plus metadata, so a fixture stored in
+# the internal layout is converted first. Numbers are unaffected: the
+# conversion only renames columns.
+quiet_run <- function(...) {
+    suppressWarnings(run_wide_as_meta(..., verbose = FALSE))
+}
 
 # A single masked cell: enough to exercise the pipeline, fast enough for tests.
 demo_prep <- function() {

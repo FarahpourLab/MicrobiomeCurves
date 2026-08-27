@@ -48,34 +48,28 @@ data(taxa_demo)
 
 # Giving the package your own tables
 
-The usual starting point is the pair of tables a study already produces: an
-abundance table with taxa in rows and one column per sample, and a metadata
+The input is the pair of tables a study already produces: an abundance table
+with **taxa in the row names** and one column per sample, and a metadata
 sheet saying which sample came from which subject at which time. You say
-which metadata column is which, so they can be named anything.
+which metadata column is which, so they can be named anything, and nothing is
+encoded in a column name.
+
+The bundled example is available in exactly that form:
 
 ```{r own-tables}
-counts <- data.frame(
-    taxon = c("Bacteroides", "Prevotella", "Akkermansia"),
-    M01_d0 = c(1.20, 0.41, -0.3), M01_d7 = c(1.51, 0.62, -0.1),
-    M02_d0 = c(0.98, 0.55, 0.2), M02_d7 = c(1.14, 0.47, 0.4),
-    M03_d0 = c(1.05, 0.51, 0.1)
-)
+demo <- tti_demo_data()
 
-meta <- data.frame(
-    sample = c("M01_d0", "M01_d7", "M02_d0", "M02_d7", "M03_d0"),
-    mouse = c("M01", "M01", "M02", "M02", "M03"),
-    day = c(0, 7, 0, 7, 0)
-)
+demo$counts[1:3, 1:4]
+head(demo$metadata, 4)
 ```
 
 `tti_from_metadata()` converts the two into the form the model needs and
-reports what the design is missing. Here mouse M03 has no day-7 sample:
+reports what the design is missing:
 
 ```{r own-design}
 design <- tti_from_metadata(
-    counts, meta,
-    sample_col = "sample", subject_col = "mouse", time_col = "day",
-    taxon_col = "taxon"
+    demo$counts, demo$metadata,
+    sample_col = "sample", subject_col = "subject", time_col = "time"
 )
 
 design$missing
@@ -88,23 +82,93 @@ The word *subject* is used throughout for whatever the repeated measurements
 were taken on: a mouse, a participant, a plot, a bioreactor. Nothing in the
 package assumes a species.
 
-Passing the same arguments to `tti_run()` does the whole job and returns the
-completed table under your own sample names. That is the recommended route,
-and the rest of this vignette uses the older layout only because the bundled
-example data is stored that way.
+## Time points
+
+Numeric times are used as they stand, so real spacing is respected. A study
+that records visits as labels can pass those instead:
+
+```{r labels}
+lab <- demo$metadata
+lab$time <- factor(
+    paste0("visit", lab$time),
+    levels = paste0("visit", sort(unique(lab$time)))
+)
+
+d2 <- suppressWarnings(tti_from_metadata(
+    demo$counts, lab,
+    sample_col = "sample", subject_col = "subject", time_col = "time",
+    verbose = FALSE
+))
+
+d2$axis$levels
+d2$axis$positions
+```
+
+Labels are placed at consecutive positions, in the order given: the factor's
+levels if it is a factor, the order the rows appear otherwise. A warning says
+so, because equal spacing is an assumption that changes every fitted curve.
+If the real intervals are uneven, pass numbers.
+
+## Raw counts or CLR
+
+The model works on centred log-ratios. If the table holds raw counts or
+relative abundances, say so and the transformation is done here, replacing
+zeros first:
+
+```{r raw, eval = FALSE}
+run <- tti_run(
+    counts, meta,
+    sample_col = "library", subject_col = "animal", time_col = "day",
+    abundance_type = "raw"
+)
+```
+
+## Writing results to disk
+
+Give `out_dir` and the run writes two files: `imputed_abundance.tsv`, the
+completed table, and `imputation_log.txt`, a record of the design, the time
+points in order, every subject-timepoint that was missing and why, and every
+warning raised.
+
+```{r outdir}
+out <- file.path(tempdir(), "tti_example")
+run <- suppressWarnings(tti_run(
+    demo$counts, demo$metadata,
+    sample_col = "sample", subject_col = "subject", time_col = "time",
+    out_dir = out, K = 1, verbose = FALSE
+))
+
+basename(run$files)
+cat(head(readLines(file.path(out, "imputation_log.txt")), 12), sep = "
+")
+```
+
+Results come back under your own sample names, ordered by subject and then
+time:
+
+```{r completed}
+run$completed[1:3, 1:5]
+```
+
+A column is added only for a subject-timepoint that had no sample. It is
+named from its subject and time, and flagged in the returned metadata:
+
+```{r added}
+run$metadata[run$metadata$imputed, ]
+```
 
 # The internal layout
 
-Internally, and in the bundled example, a table has one column of taxon
-identifiers and one column per sample named `<subject>.<time>`:
+The fitting functions `tti_prepare()`, `tti_fit()` and `tti_impute()` work on
+a wide table whose sample columns are named `<subject>.<time>`. That is the
+benchmarking route, described later, and the form `taxa_demo` is stored in:
 
 ```{r peek}
 taxa_demo[seq_len(4), seq_len(5)]
 ```
 
 `taxa_demo` is simulated, with 12 taxa, 10 subjects and 7 time points. It
-carries both forms of missingness the package recognises. A table in this
-form can be passed directly, without metadata.
+carries both forms of missingness the package recognises.
 
 # What is missing, and why
 
@@ -143,25 +207,21 @@ head(info$observed)
 
 # Imputing a table
 
-`tti_run()` does the whole job: it detects what is missing, fits the model and
-returns the table with the gaps filled.
+`tti_run()` does the whole job: it converts the tables, reports what is
+missing, fits the model, and returns the table with the gaps filled. It was
+run above; the pieces of its result are:
 
 ```{r run}
-run <- tti_run(taxa_demo, taxon_col = "OTU_ID", K = 1, verbose = FALSE)
 run
 ```
 
-The completed table keeps the input layout. Existing columns keep their order
-and their values, because imputation does not modify measured data:
-
-```{r completed}
-run$completed[seq_len(4), seq_len(5)]
-```
-
-Every imputed cell is also available in long form:
+Every imputed cell is also available in long form, under your own subject and
+sample names rather than anything internal:
 
 ```{r long}
-head(run$imputed[, c("species", "rep", "time", "imputed_value")])
+head(run$imputed[
+    , c("species", "subject", "sample", "time", "imputed_value")
+])
 ```
 
 ## A note on warnings

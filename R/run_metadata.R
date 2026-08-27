@@ -6,44 +6,96 @@
 # created for a subject-timepoint that had no sample cannot carry a name of
 # theirs, so one is built from the subject and the time and recorded in the
 # returned metadata with imputed = TRUE.
+#
+# Warnings raised along the way are collected rather than left to scroll
+# past, so they can be written into the run log beside the design.
 
 #' Impute from an abundance table and its metadata
 #'
 #' @param dat The abundance table.
 #' @param metadata The metadata data.frame.
 #' @param sample_col,subject_col,time_col Column names within `metadata`.
-#' @param taxon_col Character name of the taxon column of `dat`, or `NULL`
-#'   to use row names.
+#' @param abundance_type Either `"clr"` or `"raw"`.
+#' @param pseudocount Zero replacement used when transforming raw values.
+#' @param out_dir Directory to write the log and completed table into, or
+#'   `NULL` to write nothing.
 #' @param K,cluster_method,use_outliers,seed Passed to the fit.
 #' @param min_observed Integer. Subjects with fewer observed time points are
 #'   reported.
 #' @param verbose Logical. Whether to report progress.
 #'
 #' @return An object of class `tti_run`, with `completed` carrying the
-#'   caller's sample names and an added `design` element.
+#'   caller's sample names.
 #'
 #' @keywords internal
 #' @noRd
 tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
-                                  time_col, taxon_col, K, cluster_method,
-                                  use_outliers, seed, min_observed, verbose) {
+                                  time_col, abundance_type, pseudocount,
+                                  out_dir, K, cluster_method, use_outliers,
+                                  seed, min_observed, verbose) {
     tti_check_meta_args(sample_col, subject_col, time_col)
 
-    design <- tti_from_metadata(
-        abundance = dat, metadata = metadata,
-        sample_col = sample_col, subject_col = subject_col,
-        time_col = time_col, taxon_col = taxon_col, verbose = verbose
+    seen <- new.env(parent = emptyenv())
+    seen$warned <- character(0)
+
+    run <- withCallingHandlers(
+        {
+            design <- tti_from_metadata(
+                abundance = dat, metadata = metadata,
+                sample_col = sample_col, subject_col = subject_col,
+                time_col = time_col, abundance_type = abundance_type,
+                pseudocount = pseudocount, verbose = verbose
+            )
+
+            fitted <- tti_run_wide(
+                design$table,
+                taxon_col = design$taxon_col,
+                K = K, cluster_method = cluster_method,
+                use_outliers = use_outliers, seed = seed,
+                min_observed = min_observed, verbose = verbose
+            )
+
+            tti_restore_names(fitted, design)
+        },
+        warning = function(w) {
+            seen$warned <- c(seen$warned, conditionMessage(w))
+            invokeRestart("muffleWarning")
+        }
     )
 
-    run <- tti_run(
-        design$table,
-        taxon_col = design$taxon_col,
-        K = K, cluster_method = cluster_method,
-        use_outliers = use_outliers, seed = seed,
-        min_observed = min_observed, verbose = verbose
-    )
+    warned <- seen$warned
+    run$warnings <- warned
+    tti_replay_warnings(warned)
 
-    tti_restore_names(run, design, taxon_col)
+    if (!is.null(out_dir)) {
+        run$files <- tti_write_output(run, out_dir, warned)
+        if (isTRUE(verbose)) {
+            message(
+                "Wrote ", paste(basename(run$files), collapse = " and "),
+                " to ", out_dir
+            )
+        }
+    }
+    run
+}
+
+#' Re-raise the warnings that were collected for the log
+#'
+#' @description
+#' They were muffled so they could be captured; the caller still needs to
+#' see them, so they are raised again once collection is finished.
+#'
+#' @param warned Character vector of warning messages.
+#'
+#' @return `NULL`, invisibly.
+#'
+#' @keywords internal
+#' @noRd
+tti_replay_warnings <- function(warned) {
+    for (w in warned) {
+        warning(w, call. = FALSE)
+    }
+    invisible(NULL)
 }
 
 #' Require all three metadata column arguments together
@@ -56,16 +108,16 @@ tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
 #' @noRd
 tti_check_meta_args <- function(sample_col, subject_col, time_col) {
     given <- c(
-        sample_col = !is.null(sample_col),
-        subject_col = !is.null(subject_col),
-        time_col = !is.null(time_col)
+        sample_col = !missing(sample_col) && !is.null(sample_col),
+        subject_col = !missing(subject_col) && !is.null(subject_col),
+        time_col = !missing(time_col) && !is.null(time_col)
     )
     if (all(given)) {
         return(invisible(NULL))
     }
     stop(
-        "When metadata is supplied, sample_col, subject_col and time_col ",
-        "must all be named. Missing: ",
+        "sample_col, subject_col and time_col must all be named, so the ",
+        "metadata columns can be identified. Missing: ",
         tti_fmt_some(names(given)[!given]), ".",
         call. = FALSE
     )
@@ -75,13 +127,12 @@ tti_check_meta_args <- function(sample_col, subject_col, time_col) {
 #'
 #' @param run The `tti_run` object produced on the encoded table.
 #' @param design The `tti_design` used to encode it.
-#' @param taxon_col The caller's taxon column name, or `NULL`.
 #'
 #' @return The `tti_run` object, renamed, with `design` added.
 #'
 #' @keywords internal
 #' @noRd
-tti_restore_names <- function(run, design, taxon_col) {
+tti_restore_names <- function(run, design) {
     completed <- run$completed
     cols <- setdiff(names(completed), design$taxon_col)
 
@@ -92,15 +143,47 @@ tti_restore_names <- function(run, design, taxon_col) {
         design$map$sample[known]
     )
 
-    id <- if (is.null(taxon_col)) "taxon" else taxon_col
-    names(completed) <- c(id, labels)
+    names(completed) <- c("taxon", labels)
 
-    run$completed <- tti_order_samples(completed, cols, design, id)
+    run$completed <- tti_order_samples(completed, cols, design)
+    run$imputed <- tti_restore_long(run$imputed, design)
     run$design <- design
     run$metadata <- tti_extend_metadata(design, cols[is.na(known)], labels)
     run$missing <- design$missing
     run$observed <- design$observed
     run
+}
+
+#' Put the caller's names back on the long prediction table
+#'
+#' @description
+#' The fit works in encoded subject codes and time positions. Handing those
+#' back would make the long table unreadable next to the caller's own
+#' metadata, so both are translated and the sample name is added.
+#'
+#' @param pred The long table from the fit.
+#' @param design The `tti_design` the run was built from.
+#'
+#' @return `pred`, with `subject`, `time` and `sample` in the caller's terms.
+#'
+#' @keywords internal
+#' @noRd
+tti_restore_long <- function(pred, design) {
+    if (is.null(pred) || nrow(pred) == 0) {
+        return(pred)
+    }
+
+    pred$subject <- design$subjects[as.integer(sub("^s", "", pred$rep))]
+    pred$time <- design$times[pred$time + 1L]
+    pred$time_label <- tti_time_label(design$axis, pred$time)
+
+    key <- paste(pred$subject, pred$time, sep = "\r")
+    known <- match(key, paste(design$map$subject, design$map$time, sep = "\r"))
+    pred$sample <- design$map$sample[known]
+
+    pred$rep <- NULL
+    front <- c("species", "subject", "sample", "time", "time_label")
+    pred[, c(front, setdiff(names(pred), front)), drop = FALSE]
 }
 
 #' Put the completed table into subject and time order
@@ -113,20 +196,19 @@ tti_restore_names <- function(run, design, taxon_col) {
 #' @param completed The completed table, already renamed.
 #' @param cols Character vector of internal column names, in table order.
 #' @param design The `tti_design` the run was built from.
-#' @param id Name of the taxon identifier column.
 #'
 #' @return `completed`, with its sample columns reordered.
 #'
 #' @keywords internal
 #' @noRd
-tti_order_samples <- function(completed, cols, design, id) {
+tti_order_samples <- function(completed, cols, design) {
     parsed <- tti_parse_cols(cols)
     subject <- design$subjects[as.integer(sub("^s", "", parsed$rep))]
     time <- design$times[parsed$time + 1L]
 
-    ord <- order(
-        match(subject, design$subjects), time,
-        method = "radix"
-    )
-    completed[, c(id, setdiff(names(completed), id)[ord]), drop = FALSE]
+    ord <- order(match(subject, design$subjects), time, method = "radix")
+    completed[
+        , c("taxon", setdiff(names(completed), "taxon")[ord]),
+        drop = FALSE
+    ]
 }

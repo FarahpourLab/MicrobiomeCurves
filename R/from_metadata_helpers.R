@@ -7,39 +7,37 @@
 
 #' Split an abundance table into a numeric matrix and taxon names
 #'
-#' @param abundance A data.frame or matrix, taxa in rows, samples in columns.
-#' @param taxon_col Character name of the taxon column, or `NULL` to use row
-#'   names.
+#' @param abundance A data.frame or matrix, taxa in the row names, samples in
+#'   columns.
 #'
 #' @return List with `mat`, the numeric matrix, and `taxa`.
 #'
 #' @keywords internal
 #' @noRd
-tti_abundance_parts <- function(abundance, taxon_col) {
+tti_abundance_parts <- function(abundance) {
     if (!is.data.frame(abundance) && !is.matrix(abundance)) {
         stop(
-            "abundance must be a data.frame or a matrix with taxa in rows ",
-            "and samples in columns, not ", class(abundance)[1], ".",
+            "abundance must be a data.frame or a matrix with taxa in the ",
+            "row names and one column per sample, not ",
+            class(abundance)[1], ".",
             call. = FALSE
         )
     }
 
+    taxa <- tti_abundance_taxa(abundance)
     df <- as.data.frame(abundance, stringsAsFactors = FALSE)
-    taxa <- tti_abundance_taxa(df, taxon_col, abundance)
-    if (!is.null(taxon_col)) {
-        df <- df[, setdiff(names(df), taxon_col), drop = FALSE]
-    }
 
     if (ncol(df) == 0) {
         stop("abundance has no sample columns.", call. = FALSE)
     }
+
     bad <- names(df)[!vapply(df, is.numeric, logical(1))]
     if (length(bad) > 0) {
         stop(
             "These abundance columns are not numeric: ", tti_fmt_some(bad),
-            ". Every column other than the taxon column is read as a ",
-            "sample. If one of these is an annotation, remove it before ",
-            "calling, or name it with taxon_col.",
+            ". Every column is read as a sample, so taxon names belong in ",
+            "the row names rather than in a column. If one of these holds ",
+            "annotation, move it out before calling.",
             call. = FALSE
         )
     }
@@ -47,34 +45,34 @@ tti_abundance_parts <- function(abundance, taxon_col) {
     list(mat = as.matrix(df), taxa = taxa)
 }
 
-#' Resolve taxon identifiers for an abundance table
+#' Read taxon identifiers from an abundance table's row names
 #'
-#' @param df The abundance table as a data.frame.
-#' @param taxon_col Character name of the taxon column, or `NULL`.
-#' @param original The object as supplied, used for its row names.
+#' @param abundance The object as supplied.
 #'
 #' @return Character vector of taxon identifiers.
 #'
 #' @keywords internal
 #' @noRd
-tti_abundance_taxa <- function(df, taxon_col, original) {
-    if (!is.null(taxon_col)) {
-        if (!(taxon_col %in% names(df))) {
-            stop(
-                "taxon_col '", taxon_col, "' is not a column of abundance. ",
-                "Columns are: ", tti_fmt_some(names(df)),
-                call. = FALSE
-            )
-        }
-        return(as.character(df[[taxon_col]]))
+tti_abundance_taxa <- function(abundance) {
+    rn <- rownames(abundance)
+    unnamed <- is.null(rn) ||
+        identical(rn, as.character(seq_len(nrow(abundance))))
+
+    if (unnamed) {
+        stop(
+            "abundance has no row names, so there are no taxon identifiers. ",
+            "Taxa are read from the row names: if they are currently in a ",
+            "column, move them first, for example with ",
+            "rownames(x) <- x$taxon; x$taxon <- NULL.",
+            call. = FALSE
+        )
     }
 
-    rn <- rownames(original)
-    if (is.null(rn) || all(rn == seq_len(nrow(df)))) {
+    if (anyDuplicated(rn) > 0) {
         stop(
-            "abundance has no row names to use as taxon identifiers. ",
-            "Either set row names, or name the column holding them with ",
-            "taxon_col.",
+            "abundance has duplicated row names: ",
+            tti_fmt_some(unique(rn[duplicated(rn)])),
+            ". Taxon identifiers must be unique.",
             call. = FALSE
         )
     }
@@ -107,13 +105,13 @@ tti_metadata_parts <- function(metadata, sample_col, subject_col, time_col,
 
     sample <- as.character(metadata[[sample_col]])
     subject <- as.character(metadata[[subject_col]])
-    time <- tti_se_times(metadata[[time_col]], time_col)
+    axis <- tti_time_axis(metadata[[time_col]], time_col)
 
     tti_check_meta_values(sample, subject, sample_col, subject_col)
     tti_check_sample_overlap(sample, ab_samples, sample_col)
 
     list(
-        sample = sample, subject = subject, time = time,
+        sample = sample, subject = subject, time = axis$time, axis = axis,
         absent = setdiff(sample, ab_samples)
     )
 }

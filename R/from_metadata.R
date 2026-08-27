@@ -28,39 +28,51 @@
 #' with no sample at all, which is discovered from the grid of subjects
 #' against time points.
 #'
-#' @param abundance A data.frame or matrix with taxa in rows and samples in
-#'   columns. Sample names are taken from the column names.
+#' @param abundance A data.frame or matrix with taxa in the **row names** and
+#'   one column per sample. Column names are the sample identifiers.
 #' @param metadata A data.frame with one row per sample.
 #' @param sample_col Character name of the metadata column holding sample
 #'   identifiers. These must match the columns of `abundance`.
 #' @param subject_col Character name of the metadata column identifying the
 #'   subject each sample was taken from.
 #' @param time_col Character name of the metadata column holding the time
-#'   point. Values must be numeric or coercible to numeric.
-#' @param taxon_col Character name of the column of `abundance` holding taxon
-#'   identifiers, or `NULL` (the default) to take them from the row names.
+#'   point. Numbers are used as they stand. Labels such as `"baseline"` and
+#'   `"week1"` are placed in order at equal spacing, taking the order from
+#'   the factor's levels if it is a factor and from the order the rows appear
+#'   otherwise; this is reported, because the spacing changes the fit.
+#' @param abundance_type Either `"clr"`, meaning the values are already
+#'   centred log-ratios, or `"raw"`, meaning counts or relative abundances to
+#'   be CLR-transformed here.
+#' @param pseudocount Used only when `abundance_type = "raw"`. Either
+#'   `"auto"`, replacing zeros per sample with a fraction of that sample's
+#'   smallest non-zero value, or a single positive number added to every
+#'   entry.
 #' @param verbose Logical. Whether to report the design as it is built.
 #'
 #' @return An object of class `tti_design`: a list with the converted
 #'   `table`, the `map` from internal column names back to sample names, the
-#'   `metadata` extended with any subject-timepoint that has no sample,
-#'   `missing`, `observed`, `subjects`, `times` and `taxon_col`.
+#'   `metadata`, `missing`, `observed`, `subjects`, `times`, the time `axis`
+#'   and `taxon_col`.
 #'
 #' @examples
-#' counts <- data.frame(
-#'     taxon = c("Bacteroides", "Prevotella"),
-#'     S1 = c(1.2, 0.4), S2 = c(1.5, 0.6), S3 = c(1.1, 0.5)
+#' counts <- matrix(
+#'     c(12, 4, 9, 15, 6, 11, 10, 5, 8),
+#'     nrow = 3,
+#'     dimnames = list(
+#'         c("Bacteroides", "Prevotella", "Akkermansia"),
+#'         c("RUN_0031", "RUN_0044", "RUN_0052")
+#'     )
 #' )
 #' meta <- data.frame(
-#'     sample = c("S1", "S2", "S3"),
-#'     mouse = c("M01", "M01", "M02"),
+#'     library = c("RUN_0031", "RUN_0044", "RUN_0052"),
+#'     animal = c("M01", "M01", "M02"),
 #'     day = c(0, 7, 0)
 #' )
 #'
 #' design <- tti_from_metadata(
 #'     counts, meta,
-#'     sample_col = "sample", subject_col = "mouse", time_col = "day",
-#'     taxon_col = "taxon"
+#'     sample_col = "library", subject_col = "animal", time_col = "day",
+#'     abundance_type = "raw"
 #' )
 #' design$missing
 #'
@@ -70,13 +82,22 @@
 #' @export
 tti_from_metadata <- function(abundance, metadata,
                               sample_col, subject_col, time_col,
-                              taxon_col = NULL, verbose = TRUE) {
+                              abundance_type = c("clr", "raw"),
+                              pseudocount = "auto",
+                              verbose = TRUE) {
+    abundance_type <- match.arg(abundance_type)
+    tti_check_pseudocount(pseudocount)
     say <- function(...) if (isTRUE(verbose)) message(...)
 
-    ab <- tti_abundance_parts(abundance, taxon_col)
+    ab <- tti_abundance_parts(abundance)
     md <- tti_metadata_parts(
         metadata, sample_col, subject_col, time_col, colnames(ab$mat)
     )
+
+    if (identical(abundance_type, "raw")) {
+        say("Transforming raw abundances to centred log-ratios.")
+        ab$mat <- tti_clr(ab$mat, pseudocount)
+    }
 
     design <- tti_build_design(ab, md, say)
     tti_report_design(design, say)
