@@ -4,6 +4,19 @@ First submission to Bioconductor.
 
 ## Features
 
+* Data is supplied in the form a study produces: an abundance table with taxa
+  in rows and one column per sample, plus a metadata table saying which
+  sample came from which subject at which time. The three metadata columns
+  are named through `sample_col`, `subject_col` and `time_col`, so they can
+  be called anything. *Subject* refers to whatever the repeated measurements
+  were taken on, with no assumption of species.
+  `tti_from_metadata()` performs the conversion and reports the design, both
+  on screen and in its result. `tti_run()` accepts the same arguments and
+  returns the completed table under the caller's own sample names, ordered
+  by subject and then time. A column created for a subject-timepoint that
+  had no sample is named from its subject and time and flagged in the
+  returned metadata, so imputed samples stay distinguishable from measured
+  ones.
 * `tti_run()` imputes missing whole samples in a longitudinal microbiome
   table. Missing samples are detected from the data and do not need to be
   supplied as a mask. Both subject-timepoints whose column is entirely `NA`

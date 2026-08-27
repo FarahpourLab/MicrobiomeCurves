@@ -11,6 +11,10 @@ tti_run(dat, ...)
 \S4method{tti_run}{data.frame}(
   dat,
   taxon_col = "OTU_ID",
+  metadata = NULL,
+  sample_col = NULL,
+  subject_col = NULL,
+  time_col = NULL,
   K = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
@@ -38,7 +42,24 @@ tti_run(dat, ...)
 \item{...}{Further arguments passed to the \code{data.frame} method of
 \code{\link[=tti_run]{tti_run()}}, such as \code{K}, \code{use_outliers}, \code{seed} and \code{verbose}.}
 
-\item{taxon_col}{Character. Name of the taxon identifier column.}
+\item{taxon_col}{Character. Name of the taxon identifier column. With
+\code{metadata} it may be \code{NULL}, in which case taxa are taken from
+the row names.}
+
+\item{metadata}{Optional data.frame with one row per sample, saying which
+subject each sample came from and when. Supplying it lets \code{dat}
+keep the study's own sample names, which are also used for the returned
+\code{completed} table. The three columns below must then be named.}
+
+\item{sample_col}{Character. Name of the \code{metadata} column holding
+sample identifiers, matching the columns of \code{dat}.}
+
+\item{subject_col}{Character. Name of the \code{colData} column holding subject
+identifiers.}
+
+\item{time_col}{Character. Name of the \code{colData} column holding time points.
+Values must be numeric or coercible to numeric; they need not be integers
+or evenly spaced.}
 
 \item{K}{Integer or \code{NULL}. Number of trajectory clusters, passed
 straight to \code{\link{tti_fit}}. \code{NULL} selects K per taxon by mean
@@ -61,13 +82,6 @@ to \code{\link{tti_detect_missing}}.}
 flagged in a warning. Default \code{2}.}
 
 \item{verbose}{Logical. Print progress. Default \code{TRUE}.}
-
-\item{subject_col}{Character. Name of the \code{colData} column holding subject
-identifiers.}
-
-\item{time_col}{Character. Name of the \code{colData} column holding time points.
-Values must be numeric or coercible to numeric; they need not be integers
-or evenly spaced.}
 
 \item{assay_name}{Character or \code{NULL}. Which assay to impute. Defaults to
 the first assay.}

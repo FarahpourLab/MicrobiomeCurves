@@ -45,18 +45,24 @@ tti_safe_fpca <- function(Ly, Lt) {
         tti_diag_bump("small")
     }
 
-    # fdapace notes small samples and reset options on every call. Those
-    # notes are counted above and reported once by tti_fit(), so they are
-    # muffled here rather than repeated for each of the many thousands of
-    # fits a real table produces.
-    fit <- suppressMessages(tryCatch(
-        fdapace::FPCA(
-            Ly = Ly_sub,
-            Lt = Lt_sub,
-            optns = list(dataType = "Sparse")
-        ),
-        error = function(e) NULL
-    ))
+    # fdapace comments on small samples, reset options and gappy designs on
+    # every call. Those are collected here and reported once by tti_fit(),
+    # rather than repeated for each of the many thousands of fits a real
+    # table produces.
+    fit <- withCallingHandlers(
+        suppressMessages(tryCatch(
+            fdapace::FPCA(
+                Ly = Ly_sub,
+                Lt = Lt_sub,
+                optns = list(dataType = "Sparse")
+            ),
+            error = function(e) NULL
+        )),
+        warning = function(w) {
+            tti_diag_note(conditionMessage(w))
+            invokeRestart("muffleWarning")
+        }
+    )
 
     if (is.null(fit)) {
         tti_diag_bump("failed")

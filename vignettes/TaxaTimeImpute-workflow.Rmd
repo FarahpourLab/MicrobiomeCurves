@@ -46,17 +46,65 @@ library(TaxaTimeImpute)
 data(taxa_demo)
 ```
 
-# The data layout
+# Giving the package your own tables
 
-A table has one column of taxon identifiers and one column per sample, named
-`<subject>.<time>`:
+The usual starting point is the pair of tables a study already produces: an
+abundance table with taxa in rows and one column per sample, and a metadata
+sheet saying which sample came from which subject at which time. You say
+which metadata column is which, so they can be named anything.
+
+```{r own-tables}
+counts <- data.frame(
+    taxon = c("Bacteroides", "Prevotella", "Akkermansia"),
+    M01_d0 = c(1.20, 0.41, -0.3), M01_d7 = c(1.51, 0.62, -0.1),
+    M02_d0 = c(0.98, 0.55, 0.2), M02_d7 = c(1.14, 0.47, 0.4),
+    M03_d0 = c(1.05, 0.51, 0.1)
+)
+
+meta <- data.frame(
+    sample = c("M01_d0", "M01_d7", "M02_d0", "M02_d7", "M03_d0"),
+    mouse = c("M01", "M01", "M02", "M02", "M03"),
+    day = c(0, 7, 0, 7, 0)
+)
+```
+
+`tti_from_metadata()` converts the two into the form the model needs and
+reports what the design is missing. Here mouse M03 has no day-7 sample:
+
+```{r own-design}
+design <- tti_from_metadata(
+    counts, meta,
+    sample_col = "sample", subject_col = "mouse", time_col = "day",
+    taxon_col = "taxon"
+)
+
+design$missing
+```
+
+Everything printed is also returned, so nothing is available only by reading
+the console.
+
+The word *subject* is used throughout for whatever the repeated measurements
+were taken on: a mouse, a participant, a plot, a bioreactor. Nothing in the
+package assumes a species.
+
+Passing the same arguments to `tti_run()` does the whole job and returns the
+completed table under your own sample names. That is the recommended route,
+and the rest of this vignette uses the older layout only because the bundled
+example data is stored that way.
+
+# The internal layout
+
+Internally, and in the bundled example, a table has one column of taxon
+identifiers and one column per sample named `<subject>.<time>`:
 
 ```{r peek}
 taxa_demo[seq_len(4), seq_len(5)]
 ```
 
 `taxa_demo` is simulated, with 12 taxa, 10 subjects and 7 time points. It
-carries both forms of missingness the package recognises.
+carries both forms of missingness the package recognises. A table in this
+form can be passed directly, without metadata.
 
 # What is missing, and why
 

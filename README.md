@@ -34,31 +34,65 @@ itself requires, and nothing is downloaded during installation.
 
 ## Quick start
 
+Give it the two tables a study already has: an abundance table with taxa in
+rows and samples in columns, and a metadata sheet saying which sample came
+from which subject at which time. You name the three metadata columns, so
+they can be called anything.
+
 ```r
 library(TaxaTimeImpute)
-data(taxa_demo)
 
-# report what is missing
-tti_detect_missing(taxa_demo, taxon_col = "OTU_ID")$missing
-#>    rep time        reason    col
-#> 1  S02    1        all_na S02.1
-#> 2  S04    2 absent_column S04.2
-#> 3  S07    4        all_na S07.4
+counts    # taxa in rows, one column per sample
+#>         taxon M01_d0 M01_d7 M02_d0 M02_d7
+#> 1 Bacteroides   1.20   1.51   0.98   1.14
+#> 2  Prevotella   0.41   0.62   0.55   0.47
 
-# impute
-run <- tti_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
-run
-#> TaxaTimeImpute run
-#>   taxa             : 12
-#>   subjects         : 10
-#>   missing samples  : 3
-#>   cells imputed    : 36 of 36
+meta      # one row per sample
+#>   sample subject day
+#> 1 M01_d0     M01   0
+#> 2 M01_d7     M01   7
+#> 3 M02_d0     M02   0
+#> 4 M02_d7     M02   7
+
+run <- tti_run(
+    counts,
+    metadata    = meta,
+    sample_col  = "sample",
+    subject_col = "subject",
+    time_col    = "day",
+    taxon_col   = "taxon",
+    K = 1
+)
+#> Design: 8 taxa, 23 samples, 6 subjects, 4 time points.
+#>   time points: 0, 7, 14, 21
+#>   missing: 2 of 24 subject-timepoints (8.3%).
+#>     1 with no sample at all: M03 at 14
+#>     1 whose sample column is entirely NA: M05 at 21
 
 head(run$completed)
 ```
 
-Observed values are not modified. Existing columns keep their order and their
-values. A column is added only when a subject-timepoint had no sample.
+`subject` is whatever the repeated measurements were taken on — a mouse, a
+participant, a plot, a bioreactor. Nothing in the package assumes a species.
+
+The completed table comes back under your own sample names, ordered by
+subject and then time. Observed values are not modified. A column is added
+only for a subject-timepoint that had no sample at all; it is named from its
+subject and time, and `run$metadata` marks it `imputed = TRUE` so it stays
+distinguishable from a measured sample.
+
+Everything printed above is also returned, in `run$design`, so nothing is
+available only by reading the console. To inspect a design without fitting
+anything, `tti_from_metadata()` does the conversion and reporting on its own.
+
+If your table already encodes subject and time in its column names as
+`"<subject>.<time>"`, omit `metadata` and the original interface still
+applies:
+
+```r
+data(taxa_demo)
+run <- tti_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+```
 
 ## With SummarizedExperiment
 

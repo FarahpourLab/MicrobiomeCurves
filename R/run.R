@@ -167,10 +167,25 @@ tti_detect_missing <- function(
 #' model fit, but a warning names them so the results can be interpreted
 #' accordingly. This mirrors the rule used throughout the published benchmark.
 #'
-#' @param dat A data.frame in wide format: one column of taxon identifiers,
-#'   the rest named \code{"<subject>.<time>"}. Values are expected to be
-#'   CLR-transformed abundances.
-#' @param taxon_col Character. Name of the taxon identifier column.
+#' @param dat An abundance table. With \code{metadata}, this is the natural
+#'   form: taxa in rows, one column per sample, named however the study names
+#'   them. Without \code{metadata}, the sample columns must instead be named
+#'   \code{"<subject>.<time>"}. Values are expected to be CLR-transformed
+#'   abundances.
+#' @param taxon_col Character. Name of the taxon identifier column. With
+#'   \code{metadata} it may be \code{NULL}, in which case taxa are taken from
+#'   the row names.
+#' @param metadata Optional data.frame with one row per sample, saying which
+#'   subject each sample came from and when. Supplying it lets \code{dat}
+#'   keep the study's own sample names, which are also used for the returned
+#'   \code{completed} table. The three columns below must then be named.
+#' @param sample_col Character. Name of the \code{metadata} column holding
+#'   sample identifiers, matching the columns of \code{dat}.
+#' @param subject_col Character. Name of the \code{metadata} column
+#'   identifying whom or what the repeated measurements were taken on: a
+#'   mouse, a participant, a plot, a bioreactor.
+#' @param time_col Character. Name of the \code{metadata} column holding the
+#'   time point. Values must be numeric or coercible to numeric.
 #' @param K Integer or \code{NULL}. Number of trajectory clusters, passed
 #'   straight to \code{\link{tti_fit}}. \code{NULL} selects K per taxon by mean
 #'   silhouette width.
@@ -247,6 +262,10 @@ setGeneric("tti_run", function(dat, ...) standardGeneric("tti_run"))
 setMethod("tti_run", "data.frame", function(
     dat,
     taxon_col = "OTU_ID",
+    metadata = NULL,
+    sample_col = NULL,
+    subject_col = NULL,
+    time_col = NULL,
     K = NULL,
     cluster_method = c("fpca", "kmeans_fd"),
     use_outliers = TRUE,
@@ -263,6 +282,15 @@ setMethod("tti_run", "data.frame", function(
 
     say <- function(...) if (isTRUE(verbose)) message(...)
 
+    # With metadata the caller works in their own sample names throughout:
+    # the internal column encoding is applied here and undone on the way out.
+    if (!is.null(metadata)) {
+        return(tti_run_from_metadata(
+            dat, metadata, sample_col, subject_col, time_col, taxon_col,
+            K, cluster_method, use_outliers, seed, min_observed, verbose
+        ))
+    }
+
     info <- tti_survey_input(
         dat, taxon_col, times, parse_fun, make_col, min_observed, say
     )
@@ -273,19 +301,7 @@ setMethod("tti_run", "data.frame", function(
         K, cluster_method, use_outliers, seed, say
     )
 
-    structure(
-        list(
-            completed = res$completed,
-            imputed = res$pred,
-            missing = info$missing,
-            observed = info$observed,
-            partial_na = info$partial_na,
-            n_failed = res$n_failed,
-            taxon_col = taxon_col,
-            fit = res$fit
-        ),
-        class = "tti_run"
-    )
+    tti_run_result(res, info, taxon_col)
 })
 
 

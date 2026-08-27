@@ -20,6 +20,30 @@ tti_diag_reset <- function() {
     tti_diag$small <- 0L
     tti_diag$too_few <- 0L
     tti_diag$kfd_fallback <- 0L
+    tti_diag$notes <- list()
+    invisible(NULL)
+}
+
+#' Record a note raised by the fitting engine
+#'
+#' @description
+#' fdapace raises the same handful of warnings once per fit. Tallying them by
+#' text lets [tti_diag_report()] say what was raised and how often, in place
+#' of thousands of identical lines.
+#'
+#' @param text The warning's message.
+#'
+#' @return `NULL`, invisibly.
+#'
+#' @keywords internal
+#' @noRd
+tti_diag_note <- function(text) {
+    if (is.null(tti_diag$calls)) {
+        return(invisible(NULL))
+    }
+    key <- trimws(gsub("[[:space:]]+", " ", text))
+    seen <- tti_diag$notes[[key]]
+    tti_diag$notes[[key]] <- if (is.null(seen)) 1L else seen + 1L
     invisible(NULL)
 }
 
@@ -54,7 +78,8 @@ tti_diag_get <- function() {
         failed = tti_diag$failed,
         small = tti_diag$small,
         too_few = tti_diag$too_few,
-        kfd_fallback = tti_diag$kfd_fallback
+        kfd_fallback = tti_diag$kfd_fallback,
+        notes = tti_diag$notes
     )
 }
 
@@ -70,6 +95,7 @@ tti_diag_clear <- function() {
     tti_diag$small <- NULL
     tti_diag$too_few <- NULL
     tti_diag$kfd_fallback <- NULL
+    tti_diag$notes <- NULL
     invisible(NULL)
 }
 
@@ -120,6 +146,8 @@ tti_diag_report <- function(n_cells = NA_integer_) {
         ))
     }
 
+    parts <- c(parts, tti_diag_note_parts(d$notes))
+
     if (length(parts) > 0) {
         warning(
             "FPCA diagnostics across ", d$calls, " fit(s): ",
@@ -130,4 +158,48 @@ tti_diag_report <- function(n_cells = NA_integer_) {
         )
     }
     invisible(NULL)
+}
+
+#' Summarise the notes the fitting engine raised
+#'
+#' @param notes Named list of counts, keyed by message text.
+#'
+#' @return Character vector, one entry per distinct note, or empty.
+#'
+#' @keywords internal
+#' @noRd
+tti_diag_note_parts <- function(notes) {
+    if (is.null(notes) || length(notes) == 0) {
+        return(character(0))
+    }
+
+    counts <- unlist(notes, use.names = TRUE)
+    counts <- sort(counts, decreasing = TRUE)
+
+    vapply(
+        seq_along(counts),
+        function(i) {
+            paste0(
+                counts[[i]], " fit(s) reported \"",
+                tti_truncate(names(counts)[i], 90), "\""
+            )
+        },
+        character(1)
+    )
+}
+
+#' Shorten a string for use in a message
+#'
+#' @param x A single string.
+#' @param n Maximum number of characters to keep.
+#'
+#' @return `x`, elided with an ellipsis when longer than `n`.
+#'
+#' @keywords internal
+#' @noRd
+tti_truncate <- function(x, n) {
+    if (nchar(x) <= n) {
+        return(x)
+    }
+    paste0(substr(x, 1, n - 3), "...")
 }

@@ -176,6 +176,32 @@ tti_observed_counts <- function(missing, reps, times) {
     )
 }
 
+#' Assemble the object returned by tti_run()
+#'
+#' @param res List from [tti_run_pipeline()].
+#' @param info List from [tti_survey_input()].
+#' @param taxon_col Character name of the taxon column.
+#'
+#' @return An object of class `tti_run`.
+#'
+#' @keywords internal
+#' @noRd
+tti_run_result <- function(res, info, taxon_col) {
+    structure(
+        list(
+            completed = res$completed,
+            imputed = res$pred,
+            missing = info$missing,
+            observed = info$observed,
+            partial_na = info$partial_na,
+            n_failed = res$n_failed,
+            taxon_col = taxon_col,
+            fit = res$fit
+        ),
+        class = "tti_run"
+    )
+}
+
 #' Warn about anything in the table that needs the user's attention
 #'
 #' @param info List returned by [tti_detect_missing()].
