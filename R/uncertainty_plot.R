@@ -71,10 +71,18 @@ tti_write_uncertainty <- function(run, out_dir, dpi, format, say) {
     }
 
     say("Drawing uncertainty for ", length(taxa), " taxa ...")
-    plots <- lapply(taxa, function(sp) {
-        unc <- tti_taxon_uncertainty(run$fit, sp, run$design)
-        if (is.null(unc)) NULL else tti_plot_uncertainty(unc, sp)
-    })
+
+    # Working out an interval refits the same FPCA models the run already
+    # fitted, so the engine repeats the notes it made then. Those were
+    # reported in aggregate at the end of the fit; repeating them once per
+    # taxon here would say nothing new and bury the console.
+    plots <- withCallingHandlers(
+        lapply(taxa, function(sp) {
+            unc <- tti_taxon_uncertainty(run$fit, sp, run$design)
+            if (is.null(unc)) NULL else tti_plot_uncertainty(unc, sp)
+        }),
+        warning = function(w) invokeRestart("muffleWarning")
+    )
     named <- stats::setNames(plots, taxa)
     named <- named[!vapply(named, is.null, logical(1))]
     if (length(named) == 0) {

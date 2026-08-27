@@ -34,29 +34,66 @@ itself requires, and nothing is downloaded during installation.
 
 ## Quick start
 
-Give it the two tables a study already has: an abundance table with **taxa in
-the row names** and one column per sample, and a sample sheet saying which
-sample came from which subject at which time. You name the three metadata
-columns, so they can be called whatever your sheet already calls them.
+The input is the two tables a study already has. Here they are built from
+scratch, so the whole block runs as it stands:
 
 ```r
 library(TaxaTimeImpute)
 
-counts    # taxa in row names, one column per sample
-#>                    S001 S002 S003 S004 S005
-#> Bacteroides         412  380  455  501  366
-#> Faecalibacterium    198  221  176  205  240
-#> Bifidobacterium      87   64  103   58   77
-#> Akkermansia          33   41   28   35   44
+taxa <- c(
+    "Bacteroides", "Faecalibacterium", "Bifidobacterium", "Akkermansia"
+)
+subjects <- paste0("SUB", sprintf("%02d", 1:6))
+days <- c(0, 7, 14)
 
-meta      # one row per sample
+# meta: one row per sample, saying which subject it came from and when.
+# Any column names will do; you name them in the call below.
+meta <- expand.grid(
+    SubjectID = subjects, Day = days,
+    KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+)
+meta <- meta[order(meta$SubjectID, meta$Day), ]
+meta$SampleID <- sprintf("S%03d", seq_len(nrow(meta)))
+meta <- meta[, c("SampleID", "SubjectID", "Day")]
+rownames(meta) <- NULL
+
+# SUB03 missed the day-14 visit, so that sample was never collected.
+meta <- meta[!(meta$SubjectID == "SUB03" & meta$Day == 14), ]
+
+# counts: a taxa-by-samples matrix. Taxa in the ROW NAMES, one column per
+# sample, named however the sequencing run named it. Raw counts here.
+set.seed(1)
+counts <- matrix(
+    rpois(length(taxa) * nrow(meta), lambda = c(420, 200, 80, 35)),
+    nrow = length(taxa),
+    dimnames = list(taxa, meta$SampleID)
+)
+```
+
+That gives a 4 x 17 abundance matrix and 17 rows of metadata:
+
+```r
+counts[, 1:5]
+#>                  S001 S002 S003 S004 S005
+#> Bacteroides       407  388  413  411  432
+#> Faecalibacterium  218  206  188  199  212
+#> Bifidobacterium    91   86   74   88   86
+#> Akkermansia        37   38   33   39   35
+
+head(meta)
 #>   SampleID SubjectID Day
 #> 1     S001     SUB01   0
 #> 2     S002     SUB01   7
 #> 3     S003     SUB01  14
 #> 4     S004     SUB02   0
 #> 5     S005     SUB02   7
+#> 6     S006     SUB02  14
+```
 
+Note there are 17 samples for 6 subjects x 3 time points = 18: SUB03 has no
+day-14 row at all. That is the gap the package fills.
+
+```r
 run <- tti_run(
     counts, meta,
     sample_col     = "SampleID",
@@ -69,12 +106,15 @@ run <- tti_run(
                               # and picks how many groups per taxon
 )
 #> Transforming raw abundances to centred log-ratios.
-#> Design: 120 taxa, 58 samples, 20 subjects, 3 time points.
+#> Design: 4 taxa, 17 samples, 6 subjects, 3 time points.
 #>   time points, in order: 0, 7, 14
-#>   missing: 2 of 60 subject-timepoints (3.3%).
-#>     1 with no sample at all: SUB07 at 14
-#>     1 whose sample column is entirely NA: SUB13 at 7
-#> Drawing uncertainty for 120 taxa ...
+#>   missing: 1 of 18 subject-timepoints (5.6%).
+#>     1 with no sample at all: SUB03 at 14
+#> Detected 1 missing sample(s) across 6 subject(s) and 3 time point(s).
+#> Creating 1 empty column(s) for absent samples.
+#> Fitting FPCA model over 4 taxa ...
+#> Done: 4 of 4 cell(s) imputed.
+#> Drawing uncertainty for 4 taxa ...
 #> Wrote 3 file(s) to results: imputed_abundance.tsv, imputation_log.txt,
 #>   uncertainty_by_taxon.pdf
 ```
@@ -101,9 +141,26 @@ response patterns but takes considerably longer.
 ### What you get back
 
 `run$completed` carries your own sample names, ordered by subject and then
-time. Observed values are unchanged. A column is added only for a
+time, with the values on the CLR scale the model works in:
+
+```r
+run$completed[, 1:5]
+#>              taxon   S001   S002   S003   S004
+#> 1      Bacteroides  1.130  1.116  1.258  1.155
+#> 2 Faecalibacterium  0.506  0.483  0.471  0.430
+#> 3  Bifidobacterium -0.368 -0.391 -0.461 -0.386
+#> 4      Akkermansia -1.268 -1.208 -1.269 -1.200
+```
+
+Observed values are unchanged. A column is added only for a
 subject-timepoint that had no sample; it is named from its subject and time,
-and `run$metadata` marks it `imputed = TRUE`.
+and `run$metadata` marks it so it stays distinguishable from a measured one:
+
+```r
+run$metadata[run$metadata$imputed, ]
+#>      sample subject time time_label imputed
+#> 18 SUB03_14   SUB03   14         14    TRUE
+```
 
 With `out_dir`, the run writes:
 
@@ -114,9 +171,8 @@ With `out_dir`, the run writes:
 | `uncertainty_by_taxon.pdf` | one page per taxon, each imputed value with its 95% interval |
 
 ```
-MISSING (2 of 60 subject-timepoints)
-  SUB07  at time 14  [absent_sample]  no sample was collected
-  SUB13  at time 7   [no_data]  sample S038
+MISSING (1 of 18 subject-timepoints)
+  SUB03  at time 14  [absent_sample]  no sample was collected
 ```
 
 The uncertainty pages are the thing to look at before treating imputed
