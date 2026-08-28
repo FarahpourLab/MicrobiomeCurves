@@ -5,10 +5,10 @@ author:
   email: alireza.dostmohammadi@uni-due.de
 package: TaxaTimeImpute
 output:
-  BiocStyle::html_document:
-    toc_float: true
+  BiocStyle::pdf_document:
+    toc: true
 vignette: >
-  %\VignetteIndexEntry{Imputing missing microbiome timepoints}
+  %\VignetteIndexEntry{Imputing missing microbiome timepoints (PDF)}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

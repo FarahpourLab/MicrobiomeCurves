@@ -1,0 +1,394 @@
+<!-- Shared body of the workflow vignette.
+
+     Kept outside vignettes/ so R does not treat it as a vignette in its
+     own right. Both the HTML and the PDF vignette include it as a knitr
+     child, so the two formats cannot drift apart. -->
+
+# Introduction
+
+Longitudinal microbiome studies often lose whole samples. A subject misses a
+visit, or a library fails quality control, and the affected subject-timepoint
+is absent from the abundance table. Removing those subjects discards usable
+data, and leaving the gap affects any downstream calculation.
+
+`r Biocpkg("TaxaTimeImpute")` estimates the missing values. It models each
+taxon's abundance over time as a smooth curve and shares information across
+subjects using Functional Principal Component Analysis (FPCA) in the PACE
+formulation. The covariance surface is estimated from all subjects together,
+so sparse and irregularly sampled designs are supported. Per-subject smoothing
+is not possible for such designs.
+
+The package handles missing whole samples. A sample column must therefore be
+either fully observed or entirely `NA`; a column holding values for some taxa
+and `NA` for others is a different problem, and is reported as an error rather
+than imputed.
+
+```{r load}
+library(TaxaTimeImpute)
+data(taxa_demo)
+```
+
+# Giving the package your own tables
+
+The input is the pair of tables a study already produces: an abundance table
+with **taxa in the row names** and one column per sample, and a metadata
+sheet saying which sample came from which subject at which time. You say
+which metadata column is which, so they can be named anything, and nothing is
+encoded in a column name.
+
+The bundled example is available in exactly that form:
+
+```{r own-tables}
+demo <- tti_demo_data()
+
+demo$counts[1:3, 1:4]
+head(demo$metadata, 4)
+```
+
+`tti_from_metadata()` converts the two into the form the model needs and
+reports what the design is missing:
+
+```{r own-design}
+design <- tti_from_metadata(
+    demo$counts, demo$metadata,
+    sample_col = "sample", subject_col = "subject", time_col = "time"
+)
+
+design$missing
+```
+
+Everything printed is also returned, so nothing is available only by reading
+the console.
+
+The word *subject* is used throughout for whatever the repeated measurements
+were taken on: a mouse, a participant, a plot, a bioreactor. Nothing in the
+package assumes a species.
+
+## Time points
+
+A study that records visits as labels can pass those instead of numbers:
+
+```{r labels}
+lab <- demo$metadata
+lab$time <- factor(
+    paste0("visit", lab$time),
+    levels = paste0("visit", sort(unique(lab$time)))
+)
+
+d2 <- suppressWarnings(tti_from_metadata(
+    demo$counts, lab,
+    sample_col = "sample", subject_col = "subject", time_col = "time",
+    verbose = FALSE
+))
+
+d2$axis$levels
+d2$axis$positions
+```
+
+Labels are placed at consecutive positions, in the order given: the factor's
+levels if it is a factor, the order the rows appear otherwise. A warning
+states the order so it can be checked.
+
+It is worth being clear about what the model does with time. **It uses the
+order of the time points, not their values.** Days 0, 7 and 14 are fitted
+exactly as 0, 1 and 2 would be, so a study with uneven intervals is not
+represented as uneven in the fitted curve. Passing numbers rather than
+labels does not change that; the values are kept for reporting, for the axis
+of the uncertainty pages, and for naming any column that has to be created.
+
+## Raw counts or CLR
+
+The model works on centred log-ratios. If the table holds raw counts or
+relative abundances, say so and the transformation is done here, replacing
+zeros first:
+
+```{r raw, eval = FALSE}
+run <- tti_run(
+    counts, meta,
+    sample_col = "library", subject_col = "animal", time_col = "day",
+    abundance_type = "raw"
+)
+```
+
+## Writing results to disk
+
+Give `out_dir` and the run writes three things:
+
+| file | contents |
+| --- | --- |
+| `imputed_abundance.tsv` | the completed table |
+| `imputation_log.txt` | design, time order, gaps, warnings |
+| `uncertainty_by_taxon.pdf` | one page per taxon, with intervals |
+
+```{r outdir}
+out <- file.path(tempdir(), "tti_example")
+run <- suppressWarnings(tti_run(
+    demo$counts, demo$metadata,
+    sample_col = "sample", subject_col = "subject", time_col = "time",
+    out_dir = out, K = 1, verbose = FALSE
+))
+
+basename(run$files)
+cat(head(readLines(file.path(out, "imputation_log.txt")), 12), sep = "
+")
+```
+
+The uncertainty pages are what to look at before treating imputed values as
+data. Each page shows every value imputed for one taxon with its interval, so
+a taxon whose gaps rest on very little information declares itself:
+
+```{r unc}
+tti_uncertainty(run, rownames(demo$counts)[1])
+```
+
+`plots = FALSE` turns the drawing off. `plot_format = "png"` (or `"both"`)
+writes one image per taxon at `dpi`, which defaults to 300; the PDF is vector
+art and stays sharp at any size, so `dpi` does not apply to it.
+
+Results come back under your own sample names, ordered by subject and then
+time:
+
+```{r completed}
+run$completed[1:3, 1:5]
+```
+
+A column is added only for a subject-timepoint that had no sample. It is
+named from its subject and time, and flagged in the returned metadata:
+
+```{r added}
+run$metadata[run$metadata$imputed, ]
+```
+
+# The internal layout
+
+The fitting functions `tti_prepare()`, `tti_fit()` and `tti_impute()` work on
+a wide table whose sample columns are named `<subject>.<time>`. That is the
+benchmarking route, described later, and the form `taxa_demo` is stored in:
+
+```{r peek}
+taxa_demo[seq_len(4), seq_len(5)]
+```
+
+`taxa_demo` is simulated, with 12 taxa, 10 subjects and 7 time points. It
+carries both forms of missingness the package recognises.
+
+# What is missing, and why
+
+Before fitting anything, ask what the table is actually missing:
+
+```{r detect}
+info <- tti_detect_missing(taxa_demo, taxon_col = "OTU_ID")
+info$missing
+```
+
+Two reasons appear:
+
+* `absent_column`: the subject-timepoint has no column.
+* `all_na`: the column exists but every taxon in it is `NA`.
+
+A sample column must be either fully observed or entirely `NA`. A column
+holding values for some taxa and `NA` for others is neither, and is rejected
+with an error naming the offending columns, so `partial_na` is empty in any
+result you actually receive:
+
+```{r partial}
+info$partial_na
+```
+
+If that error appears, correct the data first: make the column entirely `NA`
+if the sample is genuinely missing, or fill in the individual `NA` values if
+it is not.
+
+It is also worth checking how many observations each subject retains. A
+subject with fewer than two informative points contributes to the model fit
+but has little of its own trajectory to condition on:
+
+```{r observed}
+head(info$observed)
+```
+
+# Imputing a table
+
+`tti_run()` does the whole job: it converts the tables, reports what is
+missing, fits the model, and returns the table with the gaps filled. It was
+run above; the pieces of its result are:
+
+```{r run}
+run
+```
+
+Every imputed cell is also available in long form, under your own subject and
+sample names rather than anything internal:
+
+```{r long}
+head(run$imputed[
+    , c("species", "subject", "sample", "time", "imputed_value")
+])
+```
+
+## A note on warnings
+
+Fitting sparse designs makes `r CRANpkg("fdapace")` emit
+`There is a time gap of at least ...`. This describes the sampling design and
+is not an error.
+
+# Working with SummarizedExperiment
+
+Most Bioconductor microbiome workflows carry data in a
+`r Biocpkg("TreeSummarizedExperiment")`. `tti_run()` has a method for that,
+reading subject and time from `colData`:
+
+```{r se, message = FALSE}
+library(SummarizedExperiment)
+
+se <- tti_as_demo_se()
+se
+```
+
+```{r se-run}
+out <- tti_run(
+    se,
+    subject_col = "subject",
+    time_col = "timepoint",
+    K = 1,
+    verbose = FALSE
+)
+
+assayNames(out)
+```
+
+The input assay is never modified. The completed matrix arrives as a new
+assay, so observed and imputed values stay distinguishable:
+
+```{r se-assays}
+assay(out, "imputed")[seq_len(3), seq_len(4)]
+```
+
+What happened is recorded in the object's metadata:
+
+```{r se-meta}
+metadata(out)$tti_run$missing
+metadata(out)$tti_run$added_samples
+```
+
+If a subject-timepoint had no sample at all, there is no column to write the
+imputed values into, so one is appended and `added_samples` names it. The
+returned object can therefore be wider than the input.
+
+Subject identifiers and time points are recoded internally, so names may
+contain dots or spaces and time points need not be integers or evenly spaced.
+
+# Benchmarking: masking values you already have
+
+To measure accuracy you need ground truth, so you hide values you already
+have and score the predictions. That is a different entry point:
+`tti_prepare()` takes an explicit mask.
+
+```{r bench}
+prep <- tti_prepare(
+    dat = taxa_demo,
+    taxon_col = "OTU_ID",
+    mask_list = data.frame(rep = "S01", time = 3)
+)
+
+fit <- tti_fit(prep, K = 1)
+imputed <- tti_impute(fit)
+
+head(imputed[, c("species", "true_value", "imputed_value")])
+```
+
+Now `true_value` is populated, so error metrics mean something:
+
+```{r metrics}
+metrics <- tti_metrics(fit)
+c(MSE = metrics$MSE_overall, RMSE = metrics$RMSE_overall)
+```
+
+After `tti_run()` the true values were never observed, so `true_value` and
+`se` are `NA` and `tti_metrics()` is not meaningful. The two entry points
+answer different questions.
+
+# Uncertainty
+
+`tti_ci()` propagates the FPCA score covariance to an analytic interval:
+
+```{r ci}
+ci <- tti_ci(
+    fit = fit,
+    species_name = imputed$species[1],
+    rep_id = "S01",
+    time_id = 3,
+    method = "analytic"
+)
+
+head(ci$analytic)
+```
+
+A bootstrap interval is also available via `method = "bootstrap"`, which
+refits the model `B` times and is correspondingly slower.
+
+`tti_plot()` draws the trajectory with its band, the observed points, and the
+imputed value:
+
+```{r alt}
+alt_text <- paste(
+    "FPCA trajectory for one taxon with its analytic confidence band,",
+    "the observed points, and the imputed value marked."
+)
+```
+
+```{r plot, fig.alt = alt_text}
+tti_plot(
+    fit = fit,
+    species_name = imputed$species[1],
+    rep_id = "S01",
+    time_id = 3,
+    ci_method = "analytic"
+)
+```
+
+Two panels are returned: the fitted curve with its band on the left, and the
+subject's raw observations on the right.
+
+Reading it:
+
+* The **imputed value** sits on the fitted curve at the marked time. It is not
+  interpolated between neighbouring points; it is where the shared
+  time-course, conditioned on this subject's own observations, places the
+  subject.
+* The **width of the band** is the honest part. It widens where the subject
+  has few nearby observations, so a narrow band means the estimate is well
+  determined and a wide one means it rests mostly on the population curve.
+  Compare it against the spread of the observed points: a band much wider than
+  that spread is a weakly informed imputation, and worth reporting as such.
+* **Observed points lying far from the curve** mean this subject departs from
+  the shape shared across subjects. The imputation still borrows that shape,
+  so treat such a value with more caution than the band alone suggests.
+
+# Optional refinements
+
+Two refinements are available, both switched through `tti_fit()`:
+
+* **Functional outlier screening** (`use_outliers = TRUE`, the default) drops
+  trajectories below the 5% Fraiman-Muniz depth quantile before refitting. The
+  target subject is always kept.
+* **Trajectory clustering** (`K = NULL`) selects the number of clusters per
+  taxon by mean silhouette width and refits within the target's cluster.
+  `K = 1` pools all subjects and is considerably faster.
+
+Both were benchmarked in the accompanying publication. Outlier screening
+improved 20 of 121 masks on one cohort and reduced accuracy above 0.3 masking.
+Clustering did not improve accuracy on the masks tested. They are provided as
+diagnostic options, not as default improvements.
+
+# Reproducibility
+
+`tti_fit()` takes a `seed`, and clustering is reproducible for a given seed.
+The caller's own random stream is restored when the function returns, so
+calling it does not disturb any other random draws in your session.
+
+# Session information
+
+```{r session}
+sessionInfo()
+```

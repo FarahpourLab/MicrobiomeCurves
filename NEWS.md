@@ -46,6 +46,9 @@ First submission to Bioconductor.
   subject and time and flagged in the returned metadata, so imputed samples
   stay distinguishable from measured ones.
 * `tti_demo_data()` returns the bundled example in that form.
+* The workflow vignette is provided as both HTML and PDF, generated from one
+  shared source so the two cannot drift apart. Note that vignettes are only
+  present if the package was installed with `build_vignettes = TRUE`.
 * `tti_prepare()`, `tti_fit()` and `tti_impute()` continue to take the wide
   `"<subject>.<time>"` layout, which is the benchmarking route.
 * `tti_run()` imputes missing whole samples in a longitudinal microbiome

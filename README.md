@@ -252,8 +252,20 @@ tti_plot(fit, species_name = "Taxon01", rep_id = "S01",
 
 ## Documentation
 
+The workflow vignette is available in both formats:
+
 ```r
-vignette("TaxaTimeImpute-workflow", package = "TaxaTimeImpute")
+vignette("TaxaTimeImpute-workflow", package = "TaxaTimeImpute")      # HTML
+vignette("TaxaTimeImpute-workflow-pdf", package = "TaxaTimeImpute")  # PDF
+```
+
+Both are generated from the same source, so they cannot drift apart.
+
+If `vignette()` reports that it is not found, the package was installed
+without them. Vignettes are not built by default:
+
+```r
+remotes::install_github("FarahpourLab/TaxaTimeImpute", build_vignettes = TRUE)
 ```
 
 ## Citation
