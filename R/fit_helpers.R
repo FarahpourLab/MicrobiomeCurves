@@ -1,4 +1,4 @@
-#' Check that an object came from tti_prepare()
+#' Check that an object came from mc_prepare()
 #'
 #' @param prep The object to check.
 #'
@@ -6,12 +6,12 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_check_prep <- function(prep) {
+mc_check_prep <- function(prep) {
     required_names <- c(
         "dat", "taxon_col", "col_map", "reps", "times", "mask_pairs"
     )
     if (!all(required_names %in% names(prep))) {
-        stop("prep must be an object returned by tti_prepare()")
+        stop("prep must be an object returned by mc_prepare()")
     }
     invisible(NULL)
 }
@@ -31,7 +31,7 @@ tti_check_prep <- function(prep) {
 #'
 #' @keywords internal
 #' @noRd
-tti_choose_k <- function(scores, taxon_name, K, seed) {
+mc_choose_k <- function(scores, taxon_name, K, seed) {
     if (is.null(K)) {
         select_K_silhouette_plot(scores, taxon_name, seed = seed, plot = FALSE)
     } else {
@@ -50,7 +50,7 @@ tti_choose_k <- function(scores, taxon_name, K, seed) {
 #'
 #' @keywords internal
 #' @noRd
-tti_taxon_trajectories <- function(df_sp, all_reps) {
+mc_taxon_trajectories <- function(df_sp, all_reps) {
     Lt <- Ly <- vector("list", length(all_reps))
     names(Lt) <- names(Ly) <- all_reps
 
@@ -74,7 +74,7 @@ tti_taxon_trajectories <- function(df_sp, all_reps) {
 #'
 #' @keywords internal
 #' @noRd
-tti_taxon_outliers <- function(Ly, Lt, use_outliers) {
+mc_taxon_outliers <- function(Ly, Lt, use_outliers) {
     outliers <- if (use_outliers) {
         detect_outliers_depth(Ly, Lt, alpha = 0.05)
     } else {
@@ -93,7 +93,7 @@ tti_taxon_outliers <- function(Ly, Lt, use_outliers) {
 #' @param Ly,Lt Named lists of observed values and times, one entry per
 #'   subject.
 #' @param outliers Named logical vector marking outlying subjects.
-#' @param K Integer or `NULL`, passed to [tti_choose_k()].
+#' @param K Integer or `NULL`, passed to [mc_choose_k()].
 #' @param taxon_name Character name of the taxon.
 #' @param seed Integer random seed.
 #'
@@ -103,7 +103,7 @@ tti_taxon_outliers <- function(Ly, Lt, use_outliers) {
 #'
 #' @keywords internal
 #' @noRd
-tti_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
+mc_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
                                cluster_method = "fpca") {
     Ly_use <- Ly[!outliers]
     Lt_use <- Lt[!outliers]
@@ -119,19 +119,19 @@ tti_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
         cl
     }
 
-    fp_clust <- tti_safe_fpca(Ly_use, Lt_use)
+    fp_clust <- mc_safe_fpca(Ly_use, Lt_use)
     if (is.null(fp_clust) || is.null(fp_clust$xiEst)) {
         return(single_cluster())
     }
 
     scores <- as.matrix(scale(fp_clust$xiEst))
-    K_use <- tti_choose_k(scores, taxon_name, K, seed)
+    K_use <- mc_choose_k(scores, taxon_name, K, seed)
 
     if (K_use <= 1 || nrow(scores) < 2) {
         return(single_cluster())
     }
 
-    tti_assign_clusters(
+    mc_assign_clusters(
         fp_clust, scores, K_use, names(Ly_use), cluster_method
     )
 }
@@ -141,7 +141,7 @@ tti_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
 #' @param Ly_tmp,Lt_tmp Named lists of values and times for the subjects still
 #'   in play.
 #' @param r_k Character identifier of the target subject.
-#' @param K Integer or `NULL`, passed to [tti_choose_k()].
+#' @param K Integer or `NULL`, passed to [mc_choose_k()].
 #' @param taxon_name Character name of the taxon.
 #' @param seed Integer random seed.
 #'
@@ -151,21 +151,21 @@ tti_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
 #'
 #' @keywords internal
 #' @noRd
-tti_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
+mc_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
                                    cluster_method = "fpca") {
-    fp_tmp <- tti_safe_fpca(Ly_tmp, Lt_tmp)
+    fp_tmp <- mc_safe_fpca(Ly_tmp, Lt_tmp)
     if (is.null(fp_tmp) || is.null(fp_tmp$xiEst)) {
         return(names(Ly_tmp))
     }
 
     scores <- as.matrix(scale(fp_tmp$xiEst))
-    K_use <- tti_choose_k(scores, taxon_name, K, seed)
+    K_use <- mc_choose_k(scores, taxon_name, K, seed)
 
     if (K_use <= 1 || nrow(scores) < 2) {
         return(names(Ly_tmp))
     }
 
-    clusters_tmp <- tti_assign_clusters(
+    clusters_tmp <- mc_assign_clusters(
         fp_tmp, scores, K_use, names(Ly_tmp), cluster_method
     )
 
@@ -195,7 +195,7 @@ tti_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
 #'   subject.
 #' @param outliers Named logical vector marking outlying subjects.
 #' @param r_k Character identifier of the target subject.
-#' @param K Integer or `NULL`, passed to [tti_choose_k()].
+#' @param K Integer or `NULL`, passed to [mc_choose_k()].
 #' @param taxon_name Character name of the taxon.
 #' @param seed Integer random seed.
 #'
@@ -205,7 +205,7 @@ tti_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
 #'
 #' @keywords internal
 #' @noRd
-tti_cell_members <- function(Ly, Lt, outliers, r_k, K, taxon_name, seed,
+mc_cell_members <- function(Ly, Lt, outliers, r_k, K, taxon_name, seed,
                              cluster_method = "fpca") {
     keep_idx <- if (outliers[r_k]) {
         (!outliers) | (names(Ly) == r_k)
@@ -229,7 +229,7 @@ tti_cell_members <- function(Ly, Lt, outliers, r_k, K, taxon_name, seed,
         return(out(names(Ly_tmp)))
     }
 
-    out(tti_members_of_cluster(
+    out(mc_members_of_cluster(
         Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed, cluster_method
     ))
 }
@@ -238,16 +238,16 @@ tti_cell_members <- function(Ly, Lt, outliers, r_k, K, taxon_name, seed,
 #'
 #' @param Ly,Lt Named lists of observed values and times, one entry per
 #'   subject.
-#' @param sel List returned by [tti_cell_members()].
+#' @param sel List returned by [mc_cell_members()].
 #' @param r_k Character identifier of the target subject.
 #' @param tt Numeric time point to predict.
 #'
-#' @return List from [tti_analytic_ci()], or `NULL` when FPCA could not be
+#' @return List from [mc_analytic_ci()], or `NULL` when FPCA could not be
 #'   fitted.
 #'
 #' @keywords internal
 #' @noRd
-tti_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
+mc_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
     Ly_cl <- Ly[sel$members]
     Lt_cl <- Lt[sel$members]
 
@@ -256,12 +256,12 @@ tti_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
         Lt_cl <- sel$Lt_tmp
     }
 
-    fp <- tti_safe_fpca(Ly_cl, Lt_cl)
+    fp <- mc_safe_fpca(Ly_cl, Lt_cl)
     if (is.null(fp)) {
         return(NULL)
     }
 
-    tti_analytic_ci(
+    mc_analytic_ci(
         fp,
         obs_times = Lt[[r_k]],
         obs_values = Ly[[r_k]],
@@ -286,14 +286,14 @@ tti_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
 #'
 #' @keywords internal
 #' @noRd
-tti_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
+mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
                           K, taxon_name, seed, cluster_method = "fpca") {
-    traj <- tti_taxon_trajectories(df_sp, reps)
+    traj <- mc_taxon_trajectories(df_sp, reps)
     Ly <- traj$Ly
     Lt <- traj$Lt
 
-    outliers <- tti_taxon_outliers(Ly, Lt, use_outliers)
-    clusters <- tti_taxon_clusters(
+    outliers <- mc_taxon_outliers(Ly, Lt, use_outliers)
+    clusters <- mc_taxon_clusters(
         Ly, Lt, outliers, K, taxon_name, seed, cluster_method
     )
 
@@ -305,10 +305,10 @@ tti_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
         r_k <- pred_long$rep[k]
         tt <- pred_long$time[k]
 
-        sel <- tti_cell_members(
+        sel <- mc_cell_members(
             Ly, Lt, outliers, r_k, K, taxon_name, seed, cluster_method
         )
-        ci_obj <- tti_impute_cell(Ly, Lt, sel, r_k, tt)
+        ci_obj <- mc_impute_cell(Ly, Lt, sel, r_k, tt)
 
         if (!is.null(ci_obj)) {
             imputed[j] <- ci_obj$mean
@@ -339,7 +339,7 @@ tti_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
 #'
 #' @keywords internal
 #' @noRd
-tti_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
+mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
                              pred_long, use_outliers, K, seed,
                              cluster_method = "fpca") {
     n_taxa <- length(species_vec)
@@ -353,7 +353,7 @@ tti_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
         df_sp <- dplyr::filter(long, .data[[taxon_col]] == sp_name)
         rows <- which(pred_long$taxon_idx == i)
 
-        res <- tti_fit_taxon(
+        res <- mc_fit_taxon(
             df_sp, reps, rows, pred_long, use_outliers, K, sp_name, seed,
             cluster_method
         )
@@ -374,7 +374,7 @@ tti_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
 #' Mask the target cells and reshape the table to long form
 #'
 #' @param dat Wide abundance table.
-#' @param col_map Column map from [tti_prepare()].
+#' @param col_map Column map from [mc_prepare()].
 #' @param mask_pairs Rows of `col_map` to mask.
 #'
 #' @return List with `dat`, the masked wide table, and `long`, its long form
@@ -382,7 +382,7 @@ tti_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
 #'
 #' @keywords internal
 #' @noRd
-tti_mask_and_reshape <- function(dat, col_map, mask_pairs) {
+mc_mask_and_reshape <- function(dat, col_map, mask_pairs) {
     for (cl in unique(mask_pairs$col)) {
         dat[[cl]] <- NA
     }
@@ -403,7 +403,7 @@ tti_mask_and_reshape <- function(dat, col_map, mask_pairs) {
 #'
 #' @param dat_orig Unmasked wide abundance table.
 #' @param taxon_col Character name of the taxon column.
-#' @param mask_pairs Masked subject-timepoint rows from [tti_prepare()].
+#' @param mask_pairs Masked subject-timepoint rows from [mc_prepare()].
 #' @param n_taxa Integer number of taxa.
 #'
 #' @return Data frame with one row per taxon and masked cell, carrying the
@@ -411,7 +411,7 @@ tti_mask_and_reshape <- function(dat, col_map, mask_pairs) {
 #'
 #' @keywords internal
 #' @noRd
-tti_build_targets <- function(dat_orig, taxon_col, mask_pairs, n_taxa) {
+mc_build_targets <- function(dat_orig, taxon_col, mask_pairs, n_taxa) {
     true_long <- tidyr::expand_grid(
         taxon_idx = seq_len(n_taxa),
         mask_pairs

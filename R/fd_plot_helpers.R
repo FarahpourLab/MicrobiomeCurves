@@ -1,11 +1,11 @@
 #' Assemble the data frames the panels draw
 #'
-#' @param fit Object of class `tti_fit`.
+#' @param fit Object of class `mc_fit`.
 #' @param species_name Character name of the taxon.
 #' @param rep_id Character identifier of the target subject.
 #' @param time_id Numeric time point being imputed.
 #' @param W_sp Subject-by-time matrix.
-#' @param fpca List returned by [tti_cluster_fpca()].
+#' @param fpca List returned by [mc_cluster_fpca()].
 #' @param members Character vector of subjects in the target's cluster.
 #'
 #' @return List of data frames: `fit_cluster`, `target`, `obs`, `mask`, `imp`
@@ -13,7 +13,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_plot_frames <- function(fit, species_name, rep_id, time_id,
+mc_plot_frames <- function(fit, species_name, rep_id, time_id,
                             W_sp, fpca, members) {
     times <- fit$times
     col_map <- fit$col_map
@@ -31,7 +31,7 @@ tti_plot_frames <- function(fit, species_name, rep_id, time_id,
     df_fit_cluster <- dplyr::filter(df_fit, replicate %in% members)
     df_target <- dplyr::filter(df_fit_cluster, replicate == rep_id)
 
-    pts <- tti_plot_points(
+    pts <- mc_plot_points(
         fit, species_name, rep_id, time_id, W_sp, fpca
     )
 
@@ -43,18 +43,18 @@ tti_plot_frames <- function(fit, species_name, rep_id, time_id,
 
 #' Observed, masked, imputed and true points for the target subject
 #'
-#' @param fit Object of class `tti_fit`.
+#' @param fit Object of class `mc_fit`.
 #' @param species_name Character name of the taxon.
 #' @param rep_id Character identifier of the target subject.
 #' @param time_id Numeric time point being imputed.
 #' @param W_sp Subject-by-time matrix.
-#' @param fpca List returned by [tti_cluster_fpca()].
+#' @param fpca List returned by [mc_cluster_fpca()].
 #'
 #' @return List of data frames: `obs`, `mask`, `imp` and `true`.
 #'
 #' @keywords internal
 #' @noRd
-tti_plot_points <- function(fit, species_name, rep_id, time_id,
+mc_plot_points <- function(fit, species_name, rep_id, time_id,
                             W_sp, fpca) {
     times <- fit$times
     col_map <- fit$col_map
@@ -96,7 +96,7 @@ tti_plot_points <- function(fit, species_name, rep_id, time_id,
 
 #' Draw the fitted panel with its uncertainty band
 #'
-#' @param frames List of data frames from [tti_plot_frames()].
+#' @param frames List of data frames from [mc_plot_frames()].
 #' @param bands List with `analytic` and `bootstrap` interval data frames,
 #'   either of which may be `NULL`.
 #' @param rep_id Character identifier of the target subject.
@@ -109,9 +109,9 @@ tti_plot_points <- function(fit, species_name, rep_id, time_id,
 #'
 #' @keywords internal
 #' @noRd
-tti_plot_fitted_panel <- function(frames, bands, rep_id, time_id,
+mc_plot_fitted_panel <- function(frames, bands, rep_id, time_id,
                                   species_name, cl_id, ylim) {
-    tti_add_ci_ribbons(ggplot(), bands) +
+    mc_add_ci_ribbons(ggplot(), bands) +
         geom_line(
             data = dplyr::filter(frames$fit_cluster, replicate != rep_id),
             aes(time, value, group = replicate),
@@ -170,9 +170,9 @@ tti_plot_fitted_panel <- function(frames, bands, rep_id, time_id,
 #'
 #' @keywords internal
 #' @noRd
-tti_plot_raw_panel <- function(W_sp, outliers, df_mask, rep_id,
+mc_plot_raw_panel <- function(W_sp, outliers, df_mask, rep_id,
                                time_id, ylim) {
-    df_raw <- tti_raw_long(W_sp, outliers)
+    df_raw <- mc_raw_long(W_sp, outliers)
 
     df_others <- dplyr::filter(df_raw, replicate != rep_id)
     df_raw_target <- dplyr::filter(df_raw, replicate == rep_id)
@@ -223,14 +223,14 @@ tti_plot_raw_panel <- function(W_sp, outliers, df_mask, rep_id,
 #' @param W_sp Subject-by-time matrix.
 #' @param members Character vector of subjects in the target's cluster.
 #' @param outliers Named logical vector marking outlying subjects.
-#' @param fpca List returned by [tti_cluster_fpca()].
+#' @param fpca List returned by [mc_cluster_fpca()].
 #' @param ci_obj List with `analytic` and `bootstrap` data frames.
 #'
 #' @return List with `left` and `right`, each a length-2 range.
 #'
 #' @keywords internal
 #' @noRd
-tti_plot_ylims <- function(W_sp, members, outliers, fpca, ci_obj) {
+mc_plot_ylims <- function(W_sp, members, outliers, fpca, ci_obj) {
     left <- range(
         W_sp[members, ],
         fpca$fit_mat,
@@ -259,7 +259,7 @@ tti_plot_ylims <- function(W_sp, members, outliers, fpca, ci_obj) {
 #'
 #' @keywords internal
 #' @noRd
-tti_raw_long <- function(W_sp, outliers) {
+mc_raw_long <- function(W_sp, outliers) {
     df_raw <- as.data.frame(W_sp)
     df_raw$replicate <- rownames(df_raw)
     df_raw <- tidyr::pivot_longer(
@@ -280,7 +280,7 @@ tti_raw_long <- function(W_sp, outliers) {
 #'
 #' @keywords internal
 #' @noRd
-tti_add_ci_ribbons <- function(p, bands) {
+mc_add_ci_ribbons <- function(p, bands) {
     if (!is.null(bands$bootstrap)) {
         boot <- bands$bootstrap
         boot$type <- "Bootstrap CI"

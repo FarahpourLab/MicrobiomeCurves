@@ -7,7 +7,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_parse_cols <- function(cols) {
+mc_parse_cols <- function(cols) {
     parts <- stringr::str_match(cols, "^([^\\.]+)\\.(\\d+)$")
     tibble(
         col = cols,
@@ -25,7 +25,7 @@ tti_parse_cols <- function(cols) {
 #'
 #' @keywords internal
 #' @noRd
-tti_mask_pairs_from_list <- function(mask_list) {
+mc_mask_pairs_from_list <- function(mask_list) {
     if (is.data.frame(mask_list)) {
         if (ncol(mask_list) < 2) {
             stop(
@@ -48,13 +48,13 @@ tti_mask_pairs_from_list <- function(mask_list) {
         )
     }
 
-    tti_check_pair_shape(mask_list)
+    mc_check_pair_shape(mask_list)
 
     tibble(
         rep = vapply(
             mask_list, function(x) as.character(x[1]), character(1)
         ),
-        time = tti_pair_times(mask_list)
+        time = mc_pair_times(mask_list)
     )
 }
 
@@ -72,7 +72,7 @@ tti_mask_pairs_from_list <- function(mask_list) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_pair_shape <- function(mask_list) {
+mc_check_pair_shape <- function(mask_list) {
     len <- vapply(mask_list, length, integer(1))
     if (length(len) == 0 || !any(len != 2)) {
         return(invisible(NULL))
@@ -81,8 +81,8 @@ tti_check_pair_shape <- function(mask_list) {
     bad <- which(len != 2)
     stop(
         "Every element of mask_list must be a (subject, time) pair of ",
-        "length 2. Element(s) ", tti_fmt_some(bad), " have length ",
-        tti_fmt_some(unique(len[bad])), ". Write the pairs as ",
+        "length 2. Element(s) ", mc_fmt_some(bad), " have length ",
+        mc_fmt_some(unique(len[bad])), ". Write the pairs as ",
         "list(c(\"A1\", 3), c(\"A2\", 5)) -- note that ",
         "list(A1 = 3) is a named number, not a pair -- or supply a ",
         "data frame such as data.frame(rep = \"A1\", time = 3).",
@@ -98,15 +98,15 @@ tti_check_pair_shape <- function(mask_list) {
 #'
 #' @keywords internal
 #' @noRd
-tti_pair_times <- function(mask_list) {
+mc_pair_times <- function(mask_list) {
     raw <- vapply(mask_list, function(x) as.character(x[2]), character(1))
-    num <- as.numeric(raw[!is.na(raw) & tti_looks_numeric(raw)])
+    num <- as.numeric(raw[!is.na(raw) & mc_looks_numeric(raw)])
 
     if (length(num) != length(raw)) {
-        bad <- which(is.na(raw) | !tti_looks_numeric(raw))
+        bad <- which(is.na(raw) | !mc_looks_numeric(raw))
         stop(
-            "The time in mask_list element(s) ", tti_fmt_some(bad),
-            " is not numeric: ", tti_fmt_some(raw[bad]), ".",
+            "The time in mask_list element(s) ", mc_fmt_some(bad),
+            " is not numeric: ", mc_fmt_some(raw[bad]), ".",
             call. = FALSE
         )
     }
@@ -125,7 +125,7 @@ tti_pair_times <- function(mask_list) {
 #'
 #' @keywords internal
 #' @noRd
-tti_looks_numeric <- function(x) {
+mc_looks_numeric <- function(x) {
     pat <- "^[+-]?(([0-9]+[.]?[0-9]*)|([.][0-9]+))([eE][+-]?[0-9]+)?$"
     !is.na(x) & grepl(pat, trimws(x))
 }
@@ -140,7 +140,7 @@ tti_looks_numeric <- function(x) {
 #'
 #' @keywords internal
 #' @noRd
-tti_mask_pairs_from_matrix <- function(mask_matrix) {
+mc_mask_pairs_from_matrix <- function(mask_matrix) {
     mm <- as.data.frame(mask_matrix)
 
     if ("subject" %in% names(mm)) {
@@ -171,7 +171,7 @@ tti_mask_pairs_from_matrix <- function(mask_matrix) {
 #'
 #' @keywords internal
 #' @noRd
-tti_prepare_col_map <- function(dat, taxon_col, parse_fun) {
+mc_prepare_col_map <- function(dat, taxon_col, parse_fun) {
     if (!is.data.frame(dat)) {
         stop("dat must be a data.frame")
     }

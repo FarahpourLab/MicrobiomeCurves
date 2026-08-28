@@ -22,7 +22,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_clr <- function(mat, pseudocount = "auto") {
+mc_clr <- function(mat, pseudocount = "auto") {
     if (any(mat < 0, na.rm = TRUE)) {
         stop(
             "abundance holds negative values, so it cannot be counts or ",
@@ -36,7 +36,7 @@ tti_clr <- function(mat, pseudocount = "auto") {
     for (j in seq_len(ncol(mat))) {
         x <- mat[, j]
         if (all(is.na(x))) next
-        out[, j] <- tti_clr_column(x, pseudocount)
+        out[, j] <- mc_clr_column(x, pseudocount)
     }
     out
 }
@@ -44,14 +44,14 @@ tti_clr <- function(mat, pseudocount = "auto") {
 #' Transform one sample to centred log-ratios
 #'
 #' @param x Numeric vector of abundances for one sample.
-#' @param pseudocount As in [tti_clr()].
+#' @param pseudocount As in [mc_clr()].
 #'
 #' @return Numeric vector of CLR values.
 #'
 #' @keywords internal
 #' @noRd
-tti_clr_column <- function(x, pseudocount) {
-    x <- tti_replace_zeros(x, pseudocount)
+mc_clr_column <- function(x, pseudocount) {
+    x <- mc_replace_zeros(x, pseudocount)
     lx <- log(x)
     lx - mean(lx, na.rm = TRUE)
 }
@@ -59,13 +59,13 @@ tti_clr_column <- function(x, pseudocount) {
 #' Replace zeros so the logarithm is defined
 #'
 #' @param x Numeric vector of abundances for one sample.
-#' @param pseudocount As in [tti_clr()].
+#' @param pseudocount As in [mc_clr()].
 #'
 #' @return `x` with zeros replaced.
 #'
 #' @keywords internal
 #' @noRd
-tti_replace_zeros <- function(x, pseudocount) {
+mc_replace_zeros <- function(x, pseudocount) {
     if (!identical(pseudocount, "auto")) {
         return(x + pseudocount)
     }
@@ -93,7 +93,7 @@ tti_replace_zeros <- function(x, pseudocount) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_pseudocount <- function(pseudocount) {
+mc_check_pseudocount <- function(pseudocount) {
     if (identical(pseudocount, "auto")) {
         return(invisible(NULL))
     }

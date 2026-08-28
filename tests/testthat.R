@@ -1,4 +1,4 @@
 library(testthat)
-library(TaxaTimeImpute)
+library(MicrobiomeCurves)
 
-test_check("TaxaTimeImpute")
+test_check("MicrobiomeCurves")

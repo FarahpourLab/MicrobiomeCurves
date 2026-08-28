@@ -1,14 +1,14 @@
-# TaxaTimeImpute
+# MicrobiomeCurves
 
 <!-- badges: start -->
-[![check-bioc](https://github.com/FarahpourLab/TaxaTimeImpute/actions/workflows/check-bioc.yaml/badge.svg)](https://github.com/FarahpourLab/TaxaTimeImpute/actions/workflows/check-bioc.yaml)
+[![check-bioc](https://github.com/FarahpourLab/MicrobiomeCurves/actions/workflows/check-bioc.yaml/badge.svg)](https://github.com/FarahpourLab/MicrobiomeCurves/actions/workflows/check-bioc.yaml)
 <!-- badges: end -->
 
 Imputation of missing timepoints in longitudinal microbiome data.
 
 Longitudinal microbiome studies often lose whole samples. A subject misses a
 visit, or a library fails quality control, and the affected subject-timepoint
-is absent from the abundance table. TaxaTimeImpute estimates the missing
+is absent from the abundance table. MicrobiomeCurves estimates the missing
 values by modelling each taxon's abundance over time as a smooth curve and
 sharing information across subjects using Functional Principal Component
 Analysis (FPCA, PACE formulation). Because the covariance surface is estimated
@@ -26,7 +26,7 @@ than imputed.
 if (!requireNamespace("remotes", quietly = TRUE))
     install.packages("remotes")
 
-remotes::install_github("FarahpourLab/TaxaTimeImpute")
+remotes::install_github("FarahpourLab/MicrobiomeCurves")
 ```
 
 There are no GitHub-only dependencies, no system libraries beyond those R
@@ -38,7 +38,7 @@ The input is the two tables a study already has. Here they are built from
 scratch, so the whole block runs as it stands:
 
 ```r
-library(TaxaTimeImpute)
+library(MicrobiomeCurves)
 
 taxa <- c(
     "Bacteroides", "Faecalibacterium", "Bifidobacterium", "Akkermansia"
@@ -94,7 +94,7 @@ Note there are 17 samples for 6 subjects x 3 time points = 18: SUB03 has no
 day-14 row at all. That is the gap the package fills.
 
 ```r
-run <- tti_run(
+run <- mc_run(
     counts, meta,
     sample_col     = "SampleID",
     subject_col    = "SubjectID",
@@ -194,32 +194,32 @@ One page per taxon, with that taxon's imputed values side by side as facets.
 A taxon with more than six spills onto further pages rather than losing any.
 When a run would draw a great many pages, it says so before starting.
 
-`tti_uncertainty(run, taxon)` returns the same intervals as a table. Turn the
+`mc_uncertainty(run, taxon)` returns the same intervals as a table. Turn the
 drawing off with `plots = FALSE`. For raster copies, `plot_format = "png"`
 (or `"both"`) writes one image per page at `dpi`, which defaults to 300; the
 PDF is vector and is sharp at any size, so `dpi` does not apply to it.
 
 Everything written is also returned, in `run$design` and `run$missing`, so
 nothing is available only on screen. To inspect a design without fitting,
-`tti_from_metadata()` does the conversion and reporting alone.
+`mc_from_metadata()` does the conversion and reporting alone.
 
-The bundled example is available in this form with `tti_demo_data()`.
+The bundled example is available in this form with `mc_demo_data()`.
 
 ## With SummarizedExperiment
 
-`tti_run()` is a generic with a method for `SummarizedExperiment` and
+`mc_run()` is a generic with a method for `SummarizedExperiment` and
 `TreeSummarizedExperiment`. Subject and time are read from `colData`:
 
 ```r
 library(SummarizedExperiment)
 
-se  <- tti_as_demo_se()
-out <- tti_run(se, subject_col = "subject", time_col = "timepoint", K = 1)
+se  <- mc_as_demo_se()
+out <- mc_run(se, subject_col = "subject", time_col = "timepoint", K = 1)
 
 assayNames(out)
 #> [1] "clr"     "imputed"
 
-metadata(out)$tti_run$missing
+metadata(out)$mc_run$missing
 ```
 
 The input assay is not modified. The completed matrix is added as a new assay,
@@ -230,23 +230,23 @@ dots or spaces, and time points need not be integers or evenly spaced.
 
 | Input | Function | Result |
 | --- | --- | --- |
-| Data with missing samples | `tti_run()` | Completed table. `true_value` is `NA`, since the values were never observed |
-| Data for benchmarking | `tti_prepare()` and `tti_fit()` | Values masked on purpose, scored against the truth with `tti_metrics()` |
+| Data with missing samples | `mc_run()` | Completed table. `true_value` is `NA`, since the values were never observed |
+| Data for benchmarking | `mc_prepare()` and `mc_fit()` | Values masked on purpose, scored against the truth with `mc_metrics()` |
 
-`tti_metrics()` is not meaningful for a `tti_run()` fit, because the missing
+`mc_metrics()` is not meaningful for a `mc_run()` fit, because the missing
 values have no observed counterpart.
 
 ## Uncertainty
 
-`tti_ci()` returns analytic intervals from the FPCA score covariance, or
-bootstrap intervals. `tti_plot()` draws a trajectory with its interval:
+`mc_ci()` returns analytic intervals from the FPCA score covariance, or
+bootstrap intervals. `mc_plot()` draws a trajectory with its interval:
 
 ```r
-prep <- tti_prepare(taxa_demo, "OTU_ID",
+prep <- mc_prepare(taxa_demo, "OTU_ID",
                     mask_list = data.frame(rep = "S01", time = 3))
-fit  <- tti_fit(prep, K = 1)
+fit  <- mc_fit(prep, K = 1)
 
-tti_plot(fit, species_name = "Taxon01", rep_id = "S01",
+mc_plot(fit, species_name = "Taxon01", rep_id = "S01",
          time_id = 3, ci_method = "analytic")
 ```
 
@@ -255,8 +255,8 @@ tti_plot(fit, species_name = "Taxon01", rep_id = "S01",
 The workflow vignette is available in both formats:
 
 ```r
-vignette("TaxaTimeImpute-workflow", package = "TaxaTimeImpute")      # HTML
-vignette("TaxaTimeImpute-workflow-pdf", package = "TaxaTimeImpute")  # PDF
+vignette("MicrobiomeCurves-workflow", package = "MicrobiomeCurves")      # HTML
+vignette("MicrobiomeCurves-workflow-pdf", package = "MicrobiomeCurves")  # PDF
 ```
 
 Both are generated from the same source, so they cannot drift apart.
@@ -265,13 +265,13 @@ If `vignette()` reports that it is not found, the package was installed
 without them. Vignettes are not built by default:
 
 ```r
-remotes::install_github("FarahpourLab/TaxaTimeImpute", build_vignettes = TRUE)
+remotes::install_github("FarahpourLab/MicrobiomeCurves", build_vignettes = TRUE)
 ```
 
 ## Citation
 
 ```r
-citation("TaxaTimeImpute")
+citation("MicrobiomeCurves")
 ```
 
 ## License

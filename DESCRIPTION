@@ -1,4 +1,4 @@
-Package: TaxaTimeImpute
+Package: MicrobiomeCurves
 Type: Package
 Title: Imputation of Missing Timepoints in Longitudinal Microbiome Data
 Version: 0.99.0
@@ -27,7 +27,7 @@ Description:
     Longitudinal microbiome studies often lose whole samples when a subject
     misses a visit or a library fails quality control. The affected
     subject-timepoint is then absent from the abundance table.
-    TaxaTimeImpute estimates the missing values by modelling each taxon's
+    MicrobiomeCurves estimates the missing values by modelling each taxon's
     abundance over time as a smooth curve and sharing information across
     subjects with Functional Principal Component Analysis. Sparse and
     irregularly sampled designs are supported. Imputed values can be reported
@@ -66,8 +66,8 @@ Suggests:
 biocViews: Software, Microbiome, Metagenomics, TimeCourse, Preprocessing,
     StatisticalMethod, Clustering, DimensionReduction, PrincipalComponent,
     QualityControl, Visualization
-URL: https://github.com/FarahpourLab/TaxaTimeImpute
-BugReports: https://github.com/FarahpourLab/TaxaTimeImpute/issues
+URL: https://github.com/FarahpourLab/MicrobiomeCurves
+BugReports: https://github.com/FarahpourLab/MicrobiomeCurves/issues
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 VignetteBuilder: knitr

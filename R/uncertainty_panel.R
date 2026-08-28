@@ -11,21 +11,21 @@
 # there is one fit and no flagged trajectories, and the panel says so
 # instead of showing an empty distinction.
 
-TTI_COL <- c(
+MC_COL <- c(
     all = "#D55E00", kept = "#0072B2", retained = "#334155",
     flagged = "#B3261E"
 )
 
 #' Draw the trajectories and interval behind one imputed value
 #'
-#' @param panel List from [tti_panel_data()].
+#' @param panel List from [mc_panel_data()].
 #' @param use_outliers Logical. Whether the fit screened for outliers.
 #'
 #' @return A `ggplot` object.
 #'
 #' @keywords internal
 #' @noRd
-tti_uncertainty_panel <- function(panel, use_outliers) {
+mc_uncertainty_panel <- function(panel, use_outliers) {
     p <- ggplot2::ggplot() +
         ggplot2::geom_ribbon(
             data = panel$bands,
@@ -53,19 +53,19 @@ tti_uncertainty_panel <- function(panel, use_outliers) {
             linewidth = 0.3, linetype = "22", colour = "grey40"
         )
 
-    tti_panel_points(p, panel) + tti_panel_scales(panel, use_outliers)
+    mc_panel_points(p, panel) + mc_panel_scales(panel, use_outliers)
 }
 
 #' Add the observed and imputed points to a panel
 #'
 #' @param p The plot so far.
-#' @param panel List from [tti_panel_data()].
+#' @param panel List from [mc_panel_data()].
 #'
 #' @return The plot with its points added.
 #'
 #' @keywords internal
 #' @noRd
-tti_panel_points <- function(p, panel) {
+mc_panel_points <- function(p, panel) {
     p <- p +
         ggplot2::geom_point(
             data = panel$observed,
@@ -91,21 +91,21 @@ tti_panel_points <- function(p, panel) {
 
 #' Colour, fill and shape scales for a panel
 #'
-#' @param panel List from [tti_panel_data()].
+#' @param panel List from [mc_panel_data()].
 #' @param use_outliers Logical. Whether the fit screened for outliers.
 #'
 #' @return A list of ggplot scales and theming.
 #'
 #' @keywords internal
 #' @noRd
-tti_panel_scales <- function(panel, use_outliers) {
+mc_panel_scales <- function(panel, use_outliers) {
     cols <- c(
-        "Fit, all replicates" = unname(TTI_COL["all"]),
-        "Fit, outliers excluded" = unname(TTI_COL["kept"]),
-        "Retained" = unname(TTI_COL["retained"]),
-        "Flagged outlier" = unname(TTI_COL["flagged"]),
-        "Subjects" = unname(TTI_COL["retained"]),
-        "Fit" = unname(TTI_COL["kept"])
+        "Fit, all replicates" = unname(MC_COL["all"]),
+        "Fit, outliers excluded" = unname(MC_COL["kept"]),
+        "Retained" = unname(MC_COL["retained"]),
+        "Flagged outlier" = unname(MC_COL["flagged"]),
+        "Subjects" = unname(MC_COL["retained"]),
+        "Fit" = unname(MC_COL["kept"])
     )
 
     shapes <- c("Observed" = 16, "Imputed" = 21, "True value" = 21)

@@ -8,7 +8,7 @@
 
 #' Write a run's log and completed table to a directory
 #'
-#' @param run The `tti_run` object.
+#' @param run The `mc_run` object.
 #' @param out_dir Directory to write into. Created if it does not exist.
 #' @param warnings Character vector of warnings raised during the run.
 #'
@@ -16,7 +16,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_write_output <- function(run, out_dir, warnings = character(0)) {
+mc_write_output <- function(run, out_dir, warnings = character(0)) {
     if (!dir.exists(out_dir)) {
         ok <- dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
         if (!ok) {
@@ -34,53 +34,53 @@ tti_write_output <- function(run, out_dir, warnings = character(0)) {
         run$completed, tsv,
         sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE
     )
-    writeLines(tti_log_lines(run, warnings), log)
+    writeLines(mc_log_lines(run, warnings), log)
 
     invisible(c(tsv, log))
 }
 
 #' Compose the lines of the run log
 #'
-#' @param run The `tti_run` object.
+#' @param run The `mc_run` object.
 #' @param warnings Character vector of warnings raised during the run.
 #'
 #' @return Character vector of lines.
 #'
 #' @keywords internal
 #' @noRd
-tti_log_lines <- function(run, warnings) {
+mc_log_lines <- function(run, warnings) {
     d <- run$design
 
     c(
-        "TaxaTimeImpute run log",
-        paste0("package version: ", tti_version_string()),
+        "MicrobiomeCurves run log",
+        paste0("package version: ", mc_version_string()),
         "",
         "DESIGN",
         paste0("  taxa        : ", nrow(run$completed)),
         paste0("  samples     : ", nrow(d$map)),
         paste0("  subjects    : ", length(d$subjects)),
         paste0("  time points : ", length(d$times)),
-        paste0("  time order  : ", tti_axis_text(d$axis)),
-        paste0("  subjects    : ", tti_fmt_some(d$subjects, n = 20)),
+        paste0("  time order  : ", mc_axis_text(d$axis)),
+        paste0("  subjects    : ", mc_fmt_some(d$subjects, n = 20)),
         "",
-        tti_log_missing(run, d),
+        mc_log_missing(run, d),
         "",
-        tti_log_result(run),
+        mc_log_result(run),
         "",
-        tti_log_warnings(warnings)
+        mc_log_warnings(warnings)
     )
 }
 
 #' The missing-sample section of the log
 #'
-#' @param run The `tti_run` object.
+#' @param run The `mc_run` object.
 #' @param d Its design.
 #'
 #' @return Character vector of lines.
 #'
 #' @keywords internal
 #' @noRd
-tti_log_missing <- function(run, d) {
+mc_log_missing <- function(run, d) {
     n_cells <- length(d$subjects) * length(d$times)
     miss <- d$missing
 
@@ -111,13 +111,13 @@ tti_log_missing <- function(run, d) {
 
 #' The outcome section of the log
 #'
-#' @param run The `tti_run` object.
+#' @param run The `mc_run` object.
 #'
 #' @return Character vector of lines.
 #'
 #' @keywords internal
 #' @noRd
-tti_log_result <- function(run) {
+mc_log_result <- function(run) {
     n_cells <- nrow(run$imputed)
     created <- sum(run$metadata$imputed)
 
@@ -128,7 +128,7 @@ tti_log_result <- function(run) {
         paste0(
             "  added columns  : ",
             if (created > 0) {
-                tti_fmt_some(run$metadata$sample[run$metadata$imputed], n = 20)
+                mc_fmt_some(run$metadata$sample[run$metadata$imputed], n = 20)
             } else {
                 "none"
             }
@@ -144,7 +144,7 @@ tti_log_result <- function(run) {
 #'
 #' @keywords internal
 #' @noRd
-tti_log_warnings <- function(warnings) {
+mc_log_warnings <- function(warnings) {
     if (length(warnings) == 0) {
         return(c("WARNINGS", "  none"))
     }
@@ -160,9 +160,9 @@ tti_log_warnings <- function(warnings) {
 #'
 #' @keywords internal
 #' @noRd
-tti_version_string <- function() {
+mc_version_string <- function() {
     v <- tryCatch(
-        as.character(utils::packageVersion("TaxaTimeImpute")),
+        as.character(utils::packageVersion("MicrobiomeCurves")),
         error = function(e) "unknown"
     )
     v

@@ -7,7 +7,7 @@
 #' the fit over all subjects and the fit with the flagged ones removed. The
 #' gap between them is what screening did to this value.
 #'
-#' @param fit The `tti_fit`.
+#' @param fit The `mc_fit`.
 #' @param W_sp Subject-by-time matrix for the taxon.
 #' @param rep_id Character subject code of the target.
 #' @param time_id Numeric time position being imputed.
@@ -18,7 +18,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_panel_bands <- function(fit, W_sp, rep_id, time_id, flagged) {
+mc_panel_bands <- function(fit, W_sp, rep_id, time_id, flagged) {
     everyone <- rownames(W_sp)
     kept <- setdiff(everyone, flagged)
     if (!(rep_id %in% kept)) {
@@ -39,7 +39,7 @@ tti_panel_bands <- function(fit, W_sp, rep_id, time_id, flagged) {
     }
 
     bands <- lapply(names(sets), function(nm) {
-        b <- tti_one_band(fit, W_sp, sets[[nm]], rep_id, time_id)
+        b <- mc_one_band(fit, W_sp, sets[[nm]], rep_id, time_id)
         if (is.null(b)) NULL else cbind(b, set = nm)
     })
     bands <- Filter(Negate(is.null), bands)
@@ -51,7 +51,7 @@ tti_panel_bands <- function(fit, W_sp, rep_id, time_id, flagged) {
 
 #' One prediction band over the fitted grid
 #'
-#' @param fit The `tti_fit`.
+#' @param fit The `mc_fit`.
 #' @param W_sp Subject-by-time matrix for the taxon.
 #' @param members Character vector of subjects to fit on.
 #' @param rep_id Character subject code of the target.
@@ -61,9 +61,9 @@ tti_panel_bands <- function(fit, W_sp, rep_id, time_id, flagged) {
 #'
 #' @keywords internal
 #' @noRd
-tti_one_band <- function(fit, W_sp, members, rep_id, time_id) {
+mc_one_band <- function(fit, W_sp, members, rep_id, time_id) {
     fpca <- tryCatch(
-        tti_cluster_fpca(W_sp, members, rep_id, time_id, fit$times),
+        mc_cluster_fpca(W_sp, members, rep_id, time_id, fit$times),
         error = function(e) NULL
     )
     if (is.null(fpca) || is.null(fpca$fp)) {
@@ -72,7 +72,7 @@ tti_one_band <- function(fit, W_sp, members, rep_id, time_id) {
 
     grid <- fpca$fp$workGrid
     ci <- lapply(grid, function(tt) {
-        tti_analytic_ci(
+        mc_analytic_ci(
             fpca$fp,
             obs_times = fpca$Lt[[rep_id]], obs_values = fpca$Ly[[rep_id]],
             pred_time = tt, include_noise = TRUE
@@ -95,7 +95,7 @@ tti_one_band <- function(fit, W_sp, members, rep_id, time_id) {
 #' Every subject's observed trajectory
 #'
 #' @param W_sp Subject-by-time matrix for the taxon.
-#' @param design The `tti_design`.
+#' @param design The `mc_design`.
 #' @param flagged Character vector of flagged subject codes.
 #' @param use_outliers Logical. Whether screening was on.
 #'
@@ -103,7 +103,7 @@ tti_one_band <- function(fit, W_sp, members, rep_id, time_id) {
 #'
 #' @keywords internal
 #' @noRd
-tti_panel_traj <- function(W_sp, design, flagged, use_outliers) {
+mc_panel_traj <- function(W_sp, design, flagged, use_outliers) {
     codes <- rownames(W_sp)
     times <- as.numeric(colnames(W_sp))
 
@@ -133,13 +133,13 @@ tti_panel_traj <- function(W_sp, design, flagged, use_outliers) {
 #'
 #' @param W_sp Subject-by-time matrix for the taxon.
 #' @param rep_id Character subject code of the target.
-#' @param design The `tti_design`.
+#' @param design The `mc_design`.
 #'
 #' @return Data frame with `time` and `value`.
 #'
 #' @keywords internal
 #' @noRd
-tti_panel_observed <- function(W_sp, rep_id, design) {
+mc_panel_observed <- function(W_sp, rep_id, design) {
     v <- as.numeric(W_sp[rep_id, ])
     keep <- !is.na(v)
     data.frame(
@@ -150,15 +150,15 @@ tti_panel_observed <- function(W_sp, rep_id, design) {
 
 #' The imputed value itself
 #'
-#' @param fit The `tti_fit`.
+#' @param fit The `mc_fit`.
 #' @param species_name,rep_id,time_id The cell.
-#' @param design The `tti_design`.
+#' @param design The `mc_design`.
 #'
 #' @return One-row data frame with `time` and `value`.
 #'
 #' @keywords internal
 #' @noRd
-tti_panel_imputed <- function(fit, species_name, rep_id, time_id, design) {
+mc_panel_imputed <- function(fit, species_name, rep_id, time_id, design) {
     pl <- fit$pred_long
     row <- pl$species == species_name & pl$rep == rep_id &
         pl$time == time_id
@@ -171,16 +171,16 @@ tti_panel_imputed <- function(fit, species_name, rep_id, time_id, design) {
 
 #' The masked value, when the fit knows it
 #'
-#' @param fit The `tti_fit`.
+#' @param fit The `mc_fit`.
 #' @param species_name,rep_id,time_id The cell.
-#' @param design The `tti_design`.
+#' @param design The `mc_design`.
 #'
 #' @return A data frame with no rows when the true value is unknown, which is
 #'   the case for any run over genuinely missing data.
 #'
 #' @keywords internal
 #' @noRd
-tti_panel_truth <- function(fit, species_name, rep_id, time_id, design) {
+mc_panel_truth <- function(fit, species_name, rep_id, time_id, design) {
     pl <- fit$pred_long
     row <- pl$species == species_name & pl$rep == rep_id &
         pl$time == time_id

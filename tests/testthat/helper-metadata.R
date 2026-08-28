@@ -6,7 +6,7 @@
 # into the package changes, not the data.
 run_wide_as_meta <- function(dat, taxon_col = "OTU_ID", ...) {
     cols <- setdiff(names(dat), taxon_col)
-    parsed <- TaxaTimeImpute:::tti_parse_cols(cols)
+    parsed <- MicrobiomeCurves:::mc_parse_cols(cols)
 
     mat <- as.matrix(dat[, cols, drop = FALSE])
     rownames(mat) <- dat[[taxon_col]]
@@ -18,7 +18,7 @@ run_wide_as_meta <- function(dat, taxon_col = "OTU_ID", ...) {
         stringsAsFactors = FALSE
     )
 
-    tti_run(mat, meta,
+    mc_run(mat, meta,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         ...
     )

@@ -1,8 +1,8 @@
 ############################################
 # User-facing pipeline
 #
-# This file is additive. It does not modify tti_prepare(), tti_fit(),
-# tti_impute() or any part of the FPCA / CI computation. It only
+# This file is additive. It does not modify mc_prepare(), mc_fit(),
+# mc_impute() or any part of the FPCA / CI computation. It only
 #
 #   (a) works out which subject-timepoints are missing in a user's table,
 #   (b) hands them to the existing functions in exactly the form the
@@ -10,13 +10,13 @@
 #   (c) writes the returned predictions back into the user's layout.
 #
 # Numerical results are therefore identical to calling
-# tti_prepare() -> tti_fit() -> tti_impute() by hand.
+# mc_prepare() -> mc_fit() -> mc_impute() by hand.
 ############################################
 
 
 #' Default column-name builder
 #'
-#' Inverse of \code{\link{tti_parse_cols}}, used to name columns that have to
+#' Inverse of \code{\link{mc_parse_cols}}, used to name columns that have to
 #' be created for subject-timepoints absent from the input table.
 #'
 #' @param rep Character vector of subject identifiers.
@@ -24,7 +24,7 @@
 #' @return Character vector of column names.
 #' @keywords internal
 #' @noRd
-tti_default_make_col <- function(rep, time) {
+mc_default_make_col <- function(rep, time) {
     paste0(rep, ".", time)
 }
 
@@ -48,7 +48,7 @@ tti_default_make_col <- function(rep, time) {
 #'
 #' The intended sampling grid is taken to be every subject crossed with every
 #' time point seen in the column names, unless \code{times} is given
-#' explicitly. Inspect the result before calling \code{\link{tti_run}} if you
+#' explicitly. Inspect the result before calling \code{\link{mc_run}} if you
 #' are unsure whether that assumption fits your design.
 #'
 #' A sample column must be either fully observed or entirely \code{NA}. The
@@ -63,7 +63,7 @@ tti_default_make_col <- function(rep, time) {
 #' @param taxon_col Character. Name of the taxon identifier column.
 #' @param times Optional numeric vector giving the intended time grid. Defaults
 #'   to the sorted unique times found in the column names.
-#' @param parse_fun Optional custom parser, as in \code{\link{tti_prepare}}.
+#' @param parse_fun Optional custom parser, as in \code{\link{mc_prepare}}.
 #'   Must return columns \code{col}, \code{rep}, \code{time}.
 #' @param make_col Optional function of \code{(rep, time)} returning a column
 #'   name, used only when a subject-timepoint has to be created. Defaults to
@@ -84,7 +84,7 @@ tti_default_make_col <- function(rep, time) {
 #' data(taxa_demo)
 #'
 #' # The bundled example table already contains missing samples.
-#' info <- tti_detect_missing(taxa_demo, taxon_col = "OTU_ID")
+#' info <- mc_detect_missing(taxa_demo, taxon_col = "OTU_ID")
 #'
 #' # what is missing, and why
 #' info$missing
@@ -93,23 +93,23 @@ tti_default_make_col <- function(rep, time) {
 #' head(info$observed)
 #'
 #' # the same table read from a CSV instead
-#' path <- system.file("extdata", "taxa_demo.csv", package = "TaxaTimeImpute")
+#' path <- system.file("extdata", "taxa_demo.csv", package = "MicrobiomeCurves")
 #' dat <- read.csv(path, check.names = FALSE)
-#' nrow(tti_detect_missing(dat, taxon_col = "OTU_ID")$missing)
+#' nrow(mc_detect_missing(dat, taxon_col = "OTU_ID")$missing)
 #'
-#' @seealso \code{\link{tti_run}}
+#' @seealso \code{\link{mc_run}}
 #' @export
-tti_detect_missing <- function(
+mc_detect_missing <- function(
     dat,
     taxon_col = "OTU_ID",
     times = NULL,
     parse_fun = NULL,
     make_col = NULL
 ) {
-    if (is.null(parse_fun)) parse_fun <- tti_parse_cols
-    if (is.null(make_col)) make_col <- tti_default_make_col
+    if (is.null(parse_fun)) parse_fun <- mc_parse_cols
+    if (is.null(make_col)) make_col <- mc_default_make_col
 
-    parsed <- tti_column_map(dat, taxon_col, parse_fun)
+    parsed <- mc_column_map(dat, taxon_col, parse_fun)
     col_map <- parsed$col_map
 
     reps <- unique(col_map$rep)
@@ -119,14 +119,14 @@ tti_detect_missing <- function(
         sort(unique(times))
     }
 
-    found <- tti_find_missing(dat, col_map, reps, times, make_col)
+    found <- mc_find_missing(dat, col_map, reps, times, make_col)
     missing <- found$missing
 
     # These are returned in the result either way, but a direct caller of
-    # tti_detect_missing() would otherwise never be told they exist.
-    tti_warn_column_issues(parsed$unparsed, found$partial_na)
+    # mc_detect_missing() would otherwise never be told they exist.
+    mc_warn_column_issues(parsed$unparsed, found$partial_na)
 
-    observed <- tti_observed_counts(missing, reps, times)
+    observed <- mc_observed_counts(missing, reps, times)
 
     list(
         missing = missing,
@@ -150,15 +150,15 @@ tti_detect_missing <- function(
 #'
 #' @details
 #' This is a convenience wrapper. It performs no modelling of its own: it
-#' calls \code{\link{tti_prepare}}, \code{\link{tti_fit}} and
-#' \code{\link{tti_impute}} exactly as the benchmark scripts do, so the numbers
+#' calls \code{\link{mc_prepare}}, \code{\link{mc_fit}} and
+#' \code{\link{mc_impute}} exactly as the benchmark scripts do, so the numbers
 #' it returns are identical to running those three functions by hand.
 #'
-#' Missingness is detected by \code{\link{tti_detect_missing}} rather than
+#' Missingness is detected by \code{\link{mc_detect_missing}} rather than
 #' supplied as a mask, which is the difference between this function and the
 #' benchmark workflow. Because the true values are unknown, the
 #' \code{true_value} and \code{se} columns of the returned long table are
-#' \code{NA}, and \code{\link{tti_metrics}} is not meaningful on the fit.
+#' \code{NA}, and \code{\link{mc_metrics}} is not meaningful on the fit.
 #'
 #' \strong{Subjects with few observations.} A subject needs at least
 #' \code{min_observed} observed time points for its own trajectory to inform
@@ -215,17 +215,17 @@ tti_detect_missing <- function(
 #'   per taxon under \code{uncertainty_png/}, at \code{dpi}), or
 #'   \code{"both"}.
 #' @param K Integer or \code{NULL}. Number of trajectory clusters, passed
-#'   straight to \code{\link{tti_fit}}. \code{NULL} selects K per taxon by mean
+#'   straight to \code{\link{mc_fit}}. \code{NULL} selects K per taxon by mean
 #'   silhouette width.
-#' @param cluster_method Character, passed to \code{\link{tti_fit}}.
-#' @param use_outliers Logical, passed to \code{\link{tti_fit}}. \code{TRUE}
+#' @param cluster_method Character, passed to \code{\link{mc_fit}}.
+#' @param use_outliers Logical, passed to \code{\link{mc_fit}}. \code{TRUE}
 #'   enables functional-depth outlier screening.
-#' @param seed Integer random seed, passed to \code{\link{tti_fit}}.
+#' @param seed Integer random seed, passed to \code{\link{mc_fit}}.
 #' @param min_observed Integer. Observation count below which a subject is
 #'   flagged in a warning. Default \code{2}.
 #' @param verbose Logical. Print progress. Default \code{TRUE}.
 #'
-#' @return An object of class \code{"tti_run"}: a list with
+#' @return An object of class \code{"mc_run"}: a list with
 #' \itemize{
 #'   \item \code{completed}: the completed table, under the caller's own
 #'     sample names, ordered by subject and then time. Observed values are
@@ -234,25 +234,25 @@ tti_detect_missing <- function(
 #'   \item \code{metadata}: the metadata with a row for each created sample,
 #'     carrying \code{imputed = TRUE}, so imputed samples stay
 #'     distinguishable from measured ones.
-#'   \item \code{design}: the \code{tti_design} the run was built from.
+#'   \item \code{design}: the \code{mc_design} the run was built from.
 #'   \item \code{imputed}: long table of every imputed cell.
 #'   \item \code{missing}: what was missing, and why.
 #'   \item \code{observed}: observed time-point count per subject.
 #'   \item \code{n_failed}: number of cells FPCA could not impute.
 #'   \item \code{warnings}: every warning raised during the run.
 #'   \item \code{files}: the paths written, when \code{out_dir} was given.
-#'   \item \code{fit}: the underlying \code{"tti_fit"} object.
+#'   \item \code{fit}: the underlying \code{"mc_fit"} object.
 #' }
 #'
 #' @examples
 #' # The bundled example in study form: taxa in the row names, samples named
 #' # however the study names them, and a metadata sheet.
-#' demo <- tti_demo_data()
+#' demo <- mc_demo_data()
 #'
 #' demo$counts[1:3, 1:4]
 #' head(demo$metadata, 3)
 #'
-#' run <- suppressWarnings(tti_run(
+#' run <- suppressWarnings(mc_run(
 #'     demo$counts, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
 #'     K = 1, verbose = FALSE
@@ -269,7 +269,7 @@ tti_detect_missing <- function(
 #'
 #' # Writing the completed table and a record of the run to a directory.
 #' out <- file.path(tempdir(), "imputation")
-#' run2 <- suppressWarnings(tti_run(
+#' run2 <- suppressWarnings(mc_run(
 #'     demo$counts, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
 #'     out_dir = out, K = 1, verbose = FALSE
@@ -277,17 +277,17 @@ tti_detect_missing <- function(
 #' basename(run2$files)
 #'
 #' @seealso
-#' \code{\link{tti_detect_missing}},
-#' \code{\link{tti_prepare}},
-#' \code{\link{tti_fit}},
-#' \code{\link{tti_impute}}
+#' \code{\link{mc_detect_missing}},
+#' \code{\link{mc_prepare}},
+#' \code{\link{mc_fit}},
+#' \code{\link{mc_impute}}
 #'
 #' @export
-setGeneric("tti_run", function(dat, ...) standardGeneric("tti_run"))
+setGeneric("mc_run", function(dat, ...) standardGeneric("mc_run"))
 
-#' @rdname tti_run
+#' @rdname mc_run
 #' @export
-setMethod("tti_run", "data.frame", function(
+setMethod("mc_run", "data.frame", function(
     dat,
     metadata,
     sample_col,
@@ -307,7 +307,7 @@ setMethod("tti_run", "data.frame", function(
     verbose = TRUE,
     ...
 ) {
-    tti_run_from_metadata(
+    mc_run_from_metadata(
         dat, metadata, sample_col, subject_col, time_col,
         match.arg(abundance_type), pseudocount, out_dir,
         plots, dpi, match.arg(plot_format),
@@ -316,9 +316,9 @@ setMethod("tti_run", "data.frame", function(
     )
 })
 
-#' @rdname tti_run
+#' @rdname mc_run
 #' @export
-setMethod("tti_run", "matrix", function(
+setMethod("mc_run", "matrix", function(
     dat,
     metadata,
     sample_col,
@@ -341,7 +341,7 @@ setMethod("tti_run", "matrix", function(
     # A matrix is the natural shape for taxa-in-row-names abundance data, so
     # it is accepted alongside a data.frame rather than being coerced by the
     # caller.
-    tti_run_from_metadata(
+    mc_run_from_metadata(
         dat, metadata, sample_col, subject_col, time_col,
         match.arg(abundance_type), pseudocount, out_dir,
         plots, dpi, match.arg(plot_format),
@@ -356,7 +356,7 @@ setMethod("tti_run", "matrix", function(
 #' The layout the fitting code works on, with sample columns named
 #' `"<subject>.<time>"`. Used by the `SummarizedExperiment` method and by the
 #' metadata path once conversion has happened. Callers preparing their own
-#' data use [tti_run()] with a metadata table instead.
+#' data use [mc_run()] with a metadata table instead.
 #'
 #' @param dat A data.frame in that layout.
 #' @param taxon_col Character name of the taxon identifier column.
@@ -367,39 +367,39 @@ setMethod("tti_run", "matrix", function(
 #'   reported.
 #' @param verbose Logical. Whether to report progress.
 #'
-#' @return An object of class `tti_run`.
+#' @return An object of class `mc_run`.
 #'
 #' @keywords internal
 #' @noRd
-tti_run_wide <- function(dat, taxon_col = "OTU_ID", K = NULL,
+mc_run_wide <- function(dat, taxon_col = "OTU_ID", K = NULL,
                          cluster_method = "fpca", use_outliers = TRUE,
                          seed = 123, times = NULL, parse_fun = NULL,
                          make_col = NULL, min_observed = 2, verbose = TRUE) {
-    if (is.null(make_col)) make_col <- tti_default_make_col
+    if (is.null(make_col)) make_col <- mc_default_make_col
     say <- function(...) if (isTRUE(verbose)) message(...)
 
-    info <- tti_survey_input(
+    info <- mc_survey_input(
         dat, taxon_col, times, parse_fun, make_col, min_observed, say
     )
-    dat_full <- tti_add_missing_columns(dat, info, say)
+    dat_full <- mc_add_missing_columns(dat, info, say)
 
-    res <- tti_run_pipeline(
+    res <- mc_run_pipeline(
         dat_full, taxon_col, parse_fun, info,
         K, cluster_method, use_outliers, seed, say
     )
 
-    tti_run_result(res, info, taxon_col)
+    mc_run_result(res, info, taxon_col)
 }
 
 
-#' Print a tti_run object
+#' Print a mc_run object
 #'
-#' @param x An object of class \code{"tti_run"}.
+#' @param x An object of class \code{"mc_run"}.
 #' @param ... Ignored.
 #' @return \code{x}, invisibly.
 #' @export
-print.tti_run <- function(x, ...) {
-    cat("TaxaTimeImpute run\n")
+print.mc_run <- function(x, ...) {
+    cat("MicrobiomeCurves run\n")
     cat("  taxa             :", nrow(x$completed), "\n")
     cat("  subjects         :", nrow(x$observed), "\n")
     cat("  missing samples  :", nrow(x$missing), "\n")

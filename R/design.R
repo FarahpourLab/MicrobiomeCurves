@@ -1,4 +1,4 @@
-# Assembling a tti_design, and reporting what it is missing.
+# Assembling a mc_design, and reporting what it is missing.
 #
 # Two kinds of gap are distinguished, because they mean different things to
 # whoever prepared the data:
@@ -18,23 +18,23 @@
 
 #' Assemble the internal table and the mapping back to sample names
 #'
-#' @param ab List from [tti_abundance_parts()].
-#' @param md List from [tti_metadata_parts()].
+#' @param ab List from [mc_abundance_parts()].
+#' @param md List from [mc_metadata_parts()].
 #' @param say Function used to report progress.
 #'
-#' @return An object of class `tti_design`.
+#' @return An object of class `mc_design`.
 #'
 #' @keywords internal
 #' @noRd
-tti_build_design <- function(ab, md, say) {
+mc_build_design <- function(ab, md, say) {
     ord <- match(colnames(ab$mat), md$sample)
     subject <- md$subject[ord]
     time <- md$time[ord]
 
-    tti_check_design(unique(subject))
-    tti_check_grid(subject, time)
+    mc_check_design(unique(subject))
+    mc_check_grid(subject, time)
 
-    enc <- tti_encode_samples(subject, time)
+    enc <- mc_encode_samples(subject, time)
 
     tab <- data.frame(OTU_ID = ab$taxa, stringsAsFactors = FALSE)
     tab[enc$label] <- as.data.frame(ab$mat)
@@ -44,7 +44,7 @@ tti_build_design <- function(ab, md, say) {
         sample = colnames(ab$mat),
         subject = subject,
         time = time,
-        time_label = tti_time_label(md$axis, time),
+        time_label = mc_time_label(md$axis, time),
         imputed = FALSE,
         stringsAsFactors = FALSE
     )
@@ -60,14 +60,14 @@ tti_build_design <- function(ab, md, say) {
             metadata = map[, c(
                 "sample", "subject", "time", "time_label", "imputed"
             )],
-            missing = tti_design_missing(empty, map, enc, md$axis),
-            observed = tti_design_observed(map, empty),
+            missing = mc_design_missing(empty, map, enc, md$axis),
+            observed = mc_design_observed(map, empty),
             subjects = enc$subjects,
             times = enc$times,
             axis = md$axis,
             taxon_col = "OTU_ID"
         ),
-        class = "tti_design"
+        class = "mc_design"
     )
 }
 
@@ -79,7 +79,7 @@ tti_build_design <- function(ab, md, say) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_grid <- function(subject, time) {
+mc_check_grid <- function(subject, time) {
     key <- paste(subject, time, sep = "\r")
     dup <- unique(key[duplicated(key)])
     if (length(dup) == 0) {
@@ -87,7 +87,7 @@ tti_check_grid <- function(subject, time) {
     }
 
     parts <- do.call(rbind, strsplit(dup, "\r", fixed = TRUE))
-    listed <- tti_fmt_some(paste0(parts[, 1], " at ", parts[, 2]))
+    listed <- mc_fmt_some(paste0(parts[, 1], " at ", parts[, 2]))
 
     stop(
         "These subject-timepoint pairs appear more than once: ", listed,
@@ -101,7 +101,7 @@ tti_check_grid <- function(subject, time) {
 #'
 #' @param empty Logical vector, `TRUE` where a sample column holds no data.
 #' @param map The column map.
-#' @param enc List from [tti_encode_samples()].
+#' @param enc List from [mc_encode_samples()].
 #' @param axis The time axis, so the label the user wrote is carried too.
 #'
 #' @return Data frame with `subject`, `time`, `time_label`, `reason` and
@@ -109,7 +109,7 @@ tti_check_grid <- function(subject, time) {
 #'
 #' @keywords internal
 #' @noRd
-tti_design_missing <- function(empty, map, enc, axis) {
+mc_design_missing <- function(empty, map, enc, axis) {
     no_data <- data.frame(
         subject = map$subject[empty], time = map$time[empty],
         reason = rep("no_data", sum(empty)),
@@ -132,7 +132,7 @@ tti_design_missing <- function(empty, map, enc, axis) {
     )
 
     out <- rbind(no_data, absent)
-    out$time_label <- tti_time_label(axis, out$time)
+    out$time_label <- mc_time_label(axis, out$time)
     out <- out[, c("subject", "time", "time_label", "reason", "sample")]
     if (nrow(out) == 0) {
         return(out)
@@ -152,7 +152,7 @@ tti_design_missing <- function(empty, map, enc, axis) {
 #'
 #' @keywords internal
 #' @noRd
-tti_design_observed <- function(map, empty) {
+mc_design_observed <- function(map, empty) {
     subjects <- unique(map$subject)
     n <- vapply(
         subjects,

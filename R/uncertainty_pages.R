@@ -7,13 +7,13 @@
 
 # Facets per page. Six fits a landscape page at a readable size; beyond that
 # the panels are too small to read a band off.
-TTI_FACETS_PER_PAGE <- 6L
+MC_FACETS_PER_PAGE <- 6L
 
 #' Every page for one taxon
 #'
-#' @param fit The `tti_fit`.
+#' @param fit The `mc_fit`.
 #' @param species_name Character name of the taxon.
-#' @param design The `tti_design`.
+#' @param design The `mc_design`.
 #' @param use_outliers Logical. Whether the fit screened for outliers.
 #'
 #' @return A list of `ggplot` objects: one page when the taxon's imputed
@@ -21,7 +21,7 @@ TTI_FACETS_PER_PAGE <- 6L
 #'
 #' @keywords internal
 #' @noRd
-tti_taxon_pages <- function(fit, species_name, design, use_outliers) {
+mc_taxon_pages <- function(fit, species_name, design, use_outliers) {
     pl <- fit$pred_long
     cells <- pl[pl$species == species_name, ]
     if (nrow(cells) == 0) {
@@ -29,7 +29,7 @@ tti_taxon_pages <- function(fit, species_name, design, use_outliers) {
     }
 
     panels <- lapply(seq_len(nrow(cells)), function(i) {
-        tti_panel_data(
+        mc_panel_data(
             fit, species_name, cells$rep[i], cells$time[i],
             design, use_outliers
         )
@@ -41,12 +41,12 @@ tti_taxon_pages <- function(fit, species_name, design, use_outliers) {
 
     groups <- split(
         panels,
-        ceiling(seq_along(panels) / TTI_FACETS_PER_PAGE)
+        ceiling(seq_along(panels) / MC_FACETS_PER_PAGE)
     )
     n_pages <- length(groups)
 
     lapply(seq_along(groups), function(i) {
-        tti_faceted_page(
+        mc_faceted_page(
             groups[[i]], species_name, use_outliers,
             if (n_pages > 1) paste0(" (page ", i, " of ", n_pages, ")") else ""
         )
@@ -64,10 +64,10 @@ tti_taxon_pages <- function(fit, species_name, design, use_outliers) {
 #'
 #' @keywords internal
 #' @noRd
-tti_faceted_page <- function(panels, species_name, use_outliers, suffix) {
-    merged <- tti_merge_panels(panels)
+mc_faceted_page <- function(panels, species_name, use_outliers, suffix) {
+    merged <- mc_merge_panels(panels)
 
-    p <- tti_uncertainty_panel(merged, use_outliers) +
+    p <- mc_uncertainty_panel(merged, use_outliers) +
         ggplot2::facet_wrap(~cell, scales = "free_y") +
         ggplot2::labs(
             title = paste0(species_name, suffix),
@@ -87,14 +87,14 @@ tti_faceted_page <- function(panels, species_name, use_outliers, suffix) {
 
 #' Stack several panels' data, tagged by facet
 #'
-#' @param panels List of panel data from [tti_panel_data()].
+#' @param panels List of panel data from [mc_panel_data()].
 #'
 #' @return A single panel-data list, with a `cell` column throughout and a
 #'   `targets` table giving each facet's target time.
 #'
 #' @keywords internal
 #' @noRd
-tti_merge_panels <- function(panels) {
+mc_merge_panels <- function(panels) {
     label <- vapply(panels, function(x) x$cell_label, character(1))
     label <- factor(label, levels = label)
 
@@ -146,8 +146,8 @@ tti_merge_panels <- function(panels) {
 #'
 #' @keywords internal
 #' @noRd
-tti_warn_page_count <- function(n_taxa, n_cells) {
-    per_taxon <- ceiling(n_cells / TTI_FACETS_PER_PAGE)
+mc_warn_page_count <- function(n_taxa, n_cells) {
+    per_taxon <- ceiling(n_cells / MC_FACETS_PER_PAGE)
     total <- n_taxa * per_taxon
     if (total <= 200) {
         return(invisible(NULL))
@@ -157,7 +157,7 @@ tti_warn_page_count <- function(n_taxa, n_cells) {
         "Drawing ", total, " uncertainty pages (", n_taxa, " taxa x ",
         per_taxon, " page(s) each, for ", n_cells,
         " imputed value(s) per taxon). This dominates the run time. Pass ",
-        "plots = FALSE to skip it, or use tti_uncertainty() to read the ",
+        "plots = FALSE to skip it, or use mc_uncertainty() to read the ",
         "intervals for the taxa you care about.",
         call. = FALSE
     )

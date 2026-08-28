@@ -9,7 +9,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_column_map <- function(dat, taxon_col, parse_fun) {
+mc_column_map <- function(dat, taxon_col, parse_fun) {
     if (!is.data.frame(dat)) {
         stop("dat must be a data.frame")
     }
@@ -71,12 +71,12 @@ tti_column_map <- function(dat, taxon_col, parse_fun) {
 #'
 #' @keywords internal
 #' @noRd
-tti_find_missing <- function(dat, col_map, reps, times, make_col) {
+mc_find_missing <- function(dat, col_map, reps, times, make_col) {
     n_na <- vapply(dat[col_map$col], function(x) sum(is.na(x)), numeric(1))
     n_taxa <- nrow(dat)
     all_na <- col_map$col[n_na == n_taxa]
 
-    partial_na <- tti_partial_na_table(dat, col_map)
+    partial_na <- mc_partial_na_table(dat, col_map)
 
     missing_all_na <- as.data.frame(
         col_map[col_map$col %in% all_na, c("rep", "time"), drop = FALSE],
@@ -129,8 +129,8 @@ tti_find_missing <- function(dat, col_map, reps, times, make_col) {
 #'
 #' @keywords internal
 #' @noRd
-tti_partial_na_table <- function(dat, col_map) {
-    keep <- tti_informative_taxa(dat, col_map)
+mc_partial_na_table <- function(dat, col_map) {
+    keep <- mc_informative_taxa(dat, col_map)
     n_keep <- sum(keep)
 
     n_na <- if (n_keep == 0) {
@@ -161,7 +161,7 @@ tti_partial_na_table <- function(dat, col_map) {
 #'
 #' @keywords internal
 #' @noRd
-tti_observed_counts <- function(missing, reps, times) {
+mc_observed_counts <- function(missing, reps, times) {
     missing_key <- paste(missing$rep, missing$time, sep = "\r")
     observed_n <- vapply(
         reps,
@@ -176,17 +176,17 @@ tti_observed_counts <- function(missing, reps, times) {
     )
 }
 
-#' Assemble the object returned by tti_run()
+#' Assemble the object returned by mc_run()
 #'
-#' @param res List from [tti_run_pipeline()].
-#' @param info List from [tti_survey_input()].
+#' @param res List from [mc_run_pipeline()].
+#' @param info List from [mc_survey_input()].
 #' @param taxon_col Character name of the taxon column.
 #'
-#' @return An object of class `tti_run`.
+#' @return An object of class `mc_run`.
 #'
 #' @keywords internal
 #' @noRd
-tti_run_result <- function(res, info, taxon_col) {
+mc_run_result <- function(res, info, taxon_col) {
     structure(
         list(
             completed = res$completed,
@@ -198,13 +198,13 @@ tti_run_result <- function(res, info, taxon_col) {
             taxon_col = taxon_col,
             fit = res$fit
         ),
-        class = "tti_run"
+        class = "mc_run"
     )
 }
 
 #' Warn about anything in the table that needs the user's attention
 #'
-#' @param info List returned by [tti_detect_missing()].
+#' @param info List returned by [mc_detect_missing()].
 #' @param min_observed Integer. Observation count below which a subject is
 #'   flagged.
 #'
@@ -212,8 +212,8 @@ tti_run_result <- function(res, info, taxon_col) {
 #'
 #' @keywords internal
 #' @noRd
-tti_warn_about_input <- function(info, min_observed) {
-    # The column warnings are raised by tti_detect_missing(), which this path
+mc_warn_about_input <- function(info, min_observed) {
+    # The column warnings are raised by mc_detect_missing(), which this path
     # has already been through, so only the thin-subject check runs here.
     thin <- info$observed$rep[info$observed$n_observed < min_observed]
     if (length(thin) > 0) {
@@ -240,13 +240,13 @@ tti_warn_about_input <- function(info, min_observed) {
 #' @param min_observed Integer threshold for flagging thin subjects.
 #' @param say Function used to report progress.
 #'
-#' @return The list returned by [tti_detect_missing()].
+#' @return The list returned by [mc_detect_missing()].
 #'
 #' @keywords internal
 #' @noRd
-tti_survey_input <- function(dat, taxon_col, times, parse_fun, make_col,
+mc_survey_input <- function(dat, taxon_col, times, parse_fun, make_col,
                              min_observed, say) {
-    info <- tti_detect_missing(
+    info <- mc_detect_missing(
         dat = dat,
         taxon_col = taxon_col,
         times = times,
@@ -268,7 +268,7 @@ tti_survey_input <- function(dat, taxon_col, times, parse_fun, make_col,
         length(info$times), " time point(s)."
     )
 
-    tti_warn_about_input(info, min_observed)
+    mc_warn_about_input(info, min_observed)
     info
 }
 
@@ -279,14 +279,14 @@ tti_survey_input <- function(dat, taxon_col, times, parse_fun, make_col,
 #' makes every sample column numeric.
 #'
 #' @param dat Wide abundance table.
-#' @param info List returned by [tti_detect_missing()].
+#' @param info List returned by [mc_detect_missing()].
 #' @param say Function used to report progress.
 #'
 #' @return The table, with columns added where needed.
 #'
 #' @keywords internal
 #' @noRd
-tti_add_missing_columns <- function(dat, info, say) {
+mc_add_missing_columns <- function(dat, info, say) {
     new_cols <- info$missing$col[info$missing$reason == "absent_column"]
     new_cols <- setdiff(unique(new_cols), colnames(dat))
 
@@ -314,13 +314,13 @@ tti_add_missing_columns <- function(dat, info, say) {
 #' Write predictions back into the wide table
 #'
 #' @param dat Wide abundance table containing a column for every missing cell.
-#' @param pred Long prediction table from [tti_impute()].
+#' @param pred Long prediction table from [mc_impute()].
 #'
 #' @return The table with imputed values filled in.
 #'
 #' @keywords internal
 #' @noRd
-tti_fill_completed <- function(dat, pred) {
+mc_fill_completed <- function(dat, pred) {
     for (cl in unique(pred$col)) {
         idx <- which(pred$col == cl)
         dat[[cl]][pred$taxon_idx[idx]] <- pred$imputed_value[idx]
@@ -330,15 +330,15 @@ tti_fill_completed <- function(dat, pred) {
 
 #' Report cells that could not be imputed
 #'
-#' @param pred Long prediction table from [tti_impute()].
+#' @param pred Long prediction table from [mc_impute()].
 #' @param say Function used to report progress.
 #'
 #' @return Integer count of cells left as `NA`.
 #'
 #' @keywords internal
 #' @noRd
-tti_report_failures <- function(pred, say) {
-    # The warning itself is raised by tti_fit(), which this path has already
+mc_report_failures <- function(pred, say) {
+    # The warning itself is raised by mc_fit(), which this path has already
     # been through, so only the progress line is emitted here. Warning again
     # would report the same cells twice.
     n_failed <- sum(is.na(pred$imputed_value))
@@ -356,7 +356,7 @@ tti_report_failures <- function(pred, say) {
 #' @param dat_full Table with a column for every missing cell.
 #' @param taxon_col Character name of the taxon column.
 #' @param parse_fun Column name parser.
-#' @param info List returned by [tti_detect_missing()].
+#' @param info List returned by [mc_detect_missing()].
 #' @param K Integer or `NULL`. Number of clusters.
 #' @param cluster_method Character clustering method.
 #' @param use_outliers Logical. Whether to screen outlying curves.
@@ -368,10 +368,10 @@ tti_report_failures <- function(pred, say) {
 #'
 #' @keywords internal
 #' @noRd
-tti_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
+mc_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
                              K, cluster_method, use_outliers, seed,
                              say) {
-    prep <- tti_prepare(
+    prep <- mc_prepare(
         dat = dat_full,
         taxon_col = taxon_col,
         mask_list = info$missing[, c("rep", "time")],
@@ -380,7 +380,7 @@ tti_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
 
     say("Fitting FPCA model over ", nrow(dat_full), " taxa ...")
 
-    fit <- tti_fit(
+    fit <- mc_fit(
         prep = prep,
         K = K,
         cluster_method = cluster_method,
@@ -388,12 +388,12 @@ tti_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
         seed = seed
     )
 
-    pred <- tti_impute(fit)
+    pred <- mc_impute(fit)
 
     list(
         fit = fit,
         pred = pred,
-        completed = tti_fill_completed(dat_full, pred),
-        n_failed = tti_report_failures(pred, say)
+        completed = mc_fill_completed(dat_full, pred),
+        n_failed = mc_report_failures(pred, say)
     )
 }

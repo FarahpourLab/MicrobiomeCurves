@@ -1,4 +1,4 @@
-# Input validation for tti_prepare().
+# Input validation for mc_prepare().
 #
 # Before these checks existed a malformed table reached the mask filter and
 # died with "No valid masked pairs.", which named the wrong culprit: a
@@ -16,7 +16,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_fmt_some <- function(x, n = 5L) {
+mc_fmt_some <- function(x, n = 5L) {
     x <- as.character(x)
     if (length(x) <= n) {
         return(paste(x, collapse = ", "))
@@ -36,11 +36,11 @@ tti_fmt_some <- function(x, n = 5L) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_numeric_cols <- function(dat, col_map) {
+mc_check_numeric_cols <- function(dat, col_map) {
     bad <- col_map$col[!vapply(dat[col_map$col], is.numeric, logical(1))]
     if (length(bad) > 0) {
         stop(
-            "These sample columns are not numeric: ", tti_fmt_some(bad),
+            "These sample columns are not numeric: ", mc_fmt_some(bad),
             ". Abundances must be numeric; a column read as text usually ",
             "means the file has a non-numeric placeholder for missing ",
             "values. Read it with na.strings= so those become NA.",
@@ -59,7 +59,7 @@ tti_check_numeric_cols <- function(dat, col_map) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_taxa <- function(dat, taxon_col) {
+mc_check_taxa <- function(dat, taxon_col) {
     taxa <- dat[[taxon_col]]
 
     if (anyNA(taxa) || any(!nzchar(trimws(as.character(taxa))))) {
@@ -74,7 +74,7 @@ tti_check_taxa <- function(dat, taxon_col) {
     if (length(dup) > 0) {
         stop(
             "Column '", taxon_col, "' has duplicated taxon names: ",
-            tti_fmt_some(dup),
+            mc_fmt_some(dup),
             ". Results are reported per taxon name, so names must be ",
             "unique. Aggregate the duplicates or make the names distinct.",
             call. = FALSE
@@ -96,7 +96,7 @@ tti_check_taxa <- function(dat, taxon_col) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_design <- function(reps) {
+mc_check_design <- function(reps) {
     if (length(reps) >= 2) {
         return(invisible(NULL))
     }
@@ -121,13 +121,13 @@ tti_check_design <- function(reps) {
 #'
 #' @keywords internal
 #' @noRd
-tti_warn_empty_taxa <- function(dat, taxon_col, col_map) {
+mc_warn_empty_taxa <- function(dat, taxon_col, col_map) {
     vals <- as.matrix(dat[col_map$col])
     empty <- rowSums(!is.na(vals)) == 0
     if (any(empty)) {
         warning(
             sum(empty), " taxa have no observed values at all: ",
-            tti_fmt_some(dat[[taxon_col]][empty]),
+            mc_fmt_some(dat[[taxon_col]][empty]),
             ". They cannot be imputed and will be returned as NA.",
             call. = FALSE
         )
@@ -150,12 +150,12 @@ tti_warn_empty_taxa <- function(dat, taxon_col, col_map) {
 #'
 #' @keywords internal
 #' @noRd
-tti_stop_no_mask_pairs <- function(mask_pairs, reps, times) {
+mc_stop_no_mask_pairs <- function(mask_pairs, reps, times) {
     if (nrow(mask_pairs) == 0) {
         stop(
             "The mask marked no samples as missing. Supply at least one ",
             "(subject, time) pair, or leave the mask arguments NULL and use ",
-            "tti_run() to impute the samples that are absent from the table.",
+            "mc_run() to impute the samples that are absent from the table.",
             call. = FALSE
         )
     }
@@ -167,16 +167,16 @@ tti_stop_no_mask_pairs <- function(mask_pairs, reps, times) {
     if (length(bad_rep) > 0) {
         detail <- c(
             detail,
-            "subjects not in the table: ", tti_fmt_some(bad_rep),
-            " (the table has ", tti_fmt_some(reps), ")"
+            "subjects not in the table: ", mc_fmt_some(bad_rep),
+            " (the table has ", mc_fmt_some(reps), ")"
         )
     }
     if (length(bad_time) > 0) {
         if (length(detail) > 0) detail <- c(detail, "; ")
         detail <- c(
             detail,
-            "time points not in the table: ", tti_fmt_some(bad_time),
-            " (the table has ", tti_fmt_some(times), ")"
+            "time points not in the table: ", mc_fmt_some(bad_time),
+            " (the table has ", mc_fmt_some(times), ")"
         )
     }
 
@@ -203,12 +203,12 @@ tti_stop_no_mask_pairs <- function(mask_pairs, reps, times) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_inputs <- function(dat, taxon_col, col_map, reps) {
-    tti_check_numeric_cols(dat, col_map)
-    tti_check_taxa(dat, taxon_col)
-    tti_check_design(reps)
-    tti_check_partial_na(dat, col_map)
-    tti_warn_empty_taxa(dat, taxon_col, col_map)
+mc_check_inputs <- function(dat, taxon_col, col_map, reps) {
+    mc_check_numeric_cols(dat, col_map)
+    mc_check_taxa(dat, taxon_col)
+    mc_check_design(reps)
+    mc_check_partial_na(dat, col_map)
+    mc_warn_empty_taxa(dat, taxon_col, col_map)
     invisible(NULL)
 }
 
@@ -221,17 +221,17 @@ tti_check_inputs <- function(dat, taxon_col, col_map, reps) {
 #'
 #' @keywords internal
 #' @noRd
-tti_collect_mask_pairs <- function(mask_list, mask_matrix) {
+mc_collect_mask_pairs <- function(mask_list, mask_matrix) {
     pairs <- tibble(rep = character(), time = numeric())
 
     if (!is.null(mask_list)) {
         pairs <- dplyr::bind_rows(
-            pairs, tti_mask_pairs_from_list(mask_list)
+            pairs, mc_mask_pairs_from_list(mask_list)
         )
     }
     if (!is.null(mask_matrix)) {
         pairs <- dplyr::bind_rows(
-            pairs, tti_mask_pairs_from_matrix(mask_matrix)
+            pairs, mc_mask_pairs_from_matrix(mask_matrix)
         )
     }
     pairs
@@ -240,8 +240,8 @@ tti_collect_mask_pairs <- function(mask_list, mask_matrix) {
 #' Warn about columns that were skipped or partly empty
 #'
 #' @description
-#' Shared by [tti_detect_missing()] and the [tti_run()] input check, so that
-#' calling `tti_detect_missing()` directly reports these too. Both are also
+#' Shared by [mc_detect_missing()] and the [mc_run()] input check, so that
+#' calling `mc_detect_missing()` directly reports these too. Both are also
 #' returned in the result, but only as fields the caller has to think to look
 #' at.
 #'
@@ -252,17 +252,17 @@ tti_collect_mask_pairs <- function(mask_list, mask_matrix) {
 #'
 #' @keywords internal
 #' @noRd
-tti_warn_column_issues <- function(unparsed, partial_na) {
+mc_warn_column_issues <- function(unparsed, partial_na) {
     if (length(unparsed) > 0) {
         warning(
             "Ignoring ", length(unparsed),
             " column(s) that do not match ",
-            "'<subject>.<time>': ", tti_fmt_some(unparsed),
+            "'<subject>.<time>': ", mc_fmt_some(unparsed),
             call. = FALSE
         )
     }
 
-    tti_stop_partial_na(partial_na$col, partial_na$n_na, partial_na$n_taxa)
+    mc_stop_partial_na(partial_na$col, partial_na$n_na, partial_na$n_taxa)
     invisible(NULL)
 }
 
@@ -284,7 +284,7 @@ tti_warn_column_issues <- function(unparsed, partial_na) {
 #'
 #' @keywords internal
 #' @noRd
-tti_stop_partial_na <- function(cols, n_na, n_taxa) {
+mc_stop_partial_na <- function(cols, n_na, n_taxa) {
     if (length(cols) == 0) {
         return(invisible(NULL))
     }
@@ -295,7 +295,7 @@ tti_stop_partial_na <- function(cols, n_na, n_taxa) {
 
     stop(
         length(cols), " sample column(s) are only partly measured: ",
-        tti_fmt_some(detail),
+        mc_fmt_some(detail),
         ". A sample must be either fully observed or entirely NA, because ",
         "the method imputes whole missing samples rather than scattered ",
         "cells. Correct the data first: set the whole column to NA if that ",
@@ -308,9 +308,9 @@ tti_stop_partial_na <- function(cols, n_na, n_taxa) {
 #' Check the table for partly measured samples
 #'
 #' @description
-#' The same check as [tti_stop_partial_na()], applied to a table that has not
-#' been through the missing-sample scan, so that `tti_prepare()` refuses the
-#' data as well as `tti_detect_missing()`.
+#' The same check as [mc_stop_partial_na()], applied to a table that has not
+#' been through the missing-sample scan, so that `mc_prepare()` refuses the
+#' data as well as `mc_detect_missing()`.
 #'
 #' @param dat The user's data frame.
 #' @param col_map Data frame of parsed columns, with a `col` column.
@@ -319,8 +319,8 @@ tti_stop_partial_na <- function(cols, n_na, n_taxa) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_partial_na <- function(dat, col_map) {
-    keep <- tti_informative_taxa(dat, col_map)
+mc_check_partial_na <- function(dat, col_map) {
+    keep <- mc_informative_taxa(dat, col_map)
     n_taxa <- sum(keep)
     if (n_taxa == 0) {
         return(invisible(NULL))
@@ -332,7 +332,7 @@ tti_check_partial_na <- function(dat, col_map) {
     )
     bad <- n_na > 0 & n_na < n_taxa
 
-    tti_stop_partial_na(
+    mc_stop_partial_na(
         col_map$col[bad], n_na[bad], rep(n_taxa, sum(bad))
     )
     invisible(NULL)
@@ -353,7 +353,7 @@ tti_check_partial_na <- function(dat, col_map) {
 #'
 #' @keywords internal
 #' @noRd
-tti_informative_taxa <- function(dat, col_map) {
+mc_informative_taxa <- function(dat, col_map) {
     observed <- vapply(
         dat[col_map$col], function(x) !is.na(x), logical(nrow(dat))
     )
@@ -366,8 +366,8 @@ tti_informative_taxa <- function(dat, col_map) {
 #' Warn about cells that could not be imputed
 #'
 #' @description
-#' Shared by [tti_fit()] and the [tti_run()] reporting path so that a direct
-#' call to `tti_fit()` reports unimputable cells too, rather than returning a
+#' Shared by [mc_fit()] and the [mc_run()] reporting path so that a direct
+#' call to `mc_fit()` reports unimputable cells too, rather than returning a
 #' column of `NA` values in silence.
 #'
 #' @param pred Long prediction table carrying an `imputed_value` column.
@@ -376,7 +376,7 @@ tti_informative_taxa <- function(dat, col_map) {
 #'
 #' @keywords internal
 #' @noRd
-tti_warn_unimputed <- function(pred) {
+mc_warn_unimputed <- function(pred) {
     n_failed <- sum(is.na(pred$imputed_value))
     if (n_failed > 0) {
         warning(
@@ -399,7 +399,7 @@ tti_warn_unimputed <- function(pred) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_mask_coverage <- function(mask_pairs, col_map) {
+mc_check_mask_coverage <- function(mask_pairs, col_map) {
     if (nrow(mask_pairs) >= nrow(col_map)) {
         stop(
             "The mask marks every one of the ", nrow(col_map),

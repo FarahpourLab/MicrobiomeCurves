@@ -1,15 +1,15 @@
-# Helpers shared by tti_ci() and tti_plot().
+# Helpers shared by mc_ci() and mc_plot().
 
 #' Build the subject-by-time matrix for one taxon
 #'
-#' @param fit Object of class `tti_fit`.
+#' @param fit Object of class `mc_fit`.
 #' @param species_name Character name of the taxon.
 #'
 #' @return Numeric matrix with subjects as rows and time points as columns.
 #'
 #' @keywords internal
 #' @noRd
-tti_subject_time_matrix <- function(fit, species_name) {
+mc_subject_time_matrix <- function(fit, species_name) {
     dat <- fit$dat
     col_map <- fit$col_map
     reps <- fit$reps
@@ -31,7 +31,7 @@ tti_subject_time_matrix <- function(fit, species_name) {
 
 #' Fit FPCA to the target subject's cluster, with the target point masked
 #'
-#' @param W_sp Subject-by-time matrix from [tti_subject_time_matrix()].
+#' @param W_sp Subject-by-time matrix from [mc_subject_time_matrix()].
 #' @param members Character vector of subjects in the target's cluster.
 #' @param rep_id Character identifier of the target subject.
 #' @param time_id Numeric time point being imputed.
@@ -42,7 +42,7 @@ tti_subject_time_matrix <- function(fit, species_name) {
 #'
 #' @keywords internal
 #' @noRd
-tti_cluster_fpca <- function(W_sp, members, rep_id, time_id, times) {
+mc_cluster_fpca <- function(W_sp, members, rep_id, time_id, times) {
     Lt <- Ly <- vector("list", length(members))
     names(Lt) <- names(Ly) <- members
 
@@ -79,11 +79,11 @@ tti_cluster_fpca <- function(W_sp, members, rep_id, time_id, times) {
 #'
 #' @keywords internal
 #' @noRd
-tti_analytic_band <- function(fp, obs_times, obs_values) {
+mc_analytic_band <- function(fp, obs_times, obs_values) {
     grid <- fp$workGrid
 
     ci_list <- lapply(grid, function(tt) {
-        tti_analytic_ci(fp, obs_times, obs_values, tt, include_noise = TRUE)
+        mc_analytic_ci(fp, obs_times, obs_values, tt, include_noise = TRUE)
     })
 
     valid <- !vapply(ci_list, is.null, logical(1))
@@ -108,7 +108,7 @@ tti_analytic_band <- function(fp, obs_times, obs_values) {
 #'
 #' @keywords internal
 #' @noRd
-tti_fpca_parts <- function(fp) {
+mc_fpca_parts <- function(fp) {
     grid <- fp$workGrid
     mu <- fp$mu
     phi <- fp$phi

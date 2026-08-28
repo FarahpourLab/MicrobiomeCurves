@@ -7,9 +7,9 @@
 
 #' Interval around every imputed value of one taxon
 #'
-#' @param fit The `tti_fit` underlying a run.
+#' @param fit The `mc_fit` underlying a run.
 #' @param species_name Character name of the taxon.
-#' @param design The `tti_design` the run was built from, used to report
+#' @param design The `mc_design` the run was built from, used to report
 #'   subjects and times as the caller wrote them.
 #'
 #' @return Data frame with `subject`, `time`, `time_label`, `imputed`,
@@ -18,17 +18,17 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_taxon_uncertainty <- function(fit, species_name, design) {
+mc_taxon_uncertainty <- function(fit, species_name, design) {
     cells <- fit$pred_long[fit$pred_long$species == species_name, ]
     if (nrow(cells) == 0) {
         return(NULL)
     }
 
     clusters <- fit$clusters[[species_name]]
-    W_sp <- tti_subject_time_matrix(fit, species_name)
+    W_sp <- mc_subject_time_matrix(fit, species_name)
 
     bounds <- lapply(seq_len(nrow(cells)), function(i) {
-        tti_cell_interval(
+        mc_cell_interval(
             fit, W_sp, clusters, cells$rep[i], cells$time[i]
         )
     })
@@ -40,7 +40,7 @@ tti_taxon_uncertainty <- function(fit, species_name, design) {
     data.frame(
         subject = subject,
         time = time,
-        time_label = tti_time_label(design$axis, time),
+        time_label = mc_time_label(design$axis, time),
         imputed = cells$imputed_value,
         lower = bounds[, "lower"],
         upper = bounds[, "upper"],
@@ -51,7 +51,7 @@ tti_taxon_uncertainty <- function(fit, species_name, design) {
 
 #' Analytic interval for one imputed cell
 #'
-#' @param fit The `tti_fit`.
+#' @param fit The `mc_fit`.
 #' @param W_sp Subject-by-time matrix for the taxon.
 #' @param clusters Named cluster assignment for the taxon, or `NULL`.
 #' @param rep_id Character subject code.
@@ -62,7 +62,7 @@ tti_taxon_uncertainty <- function(fit, species_name, design) {
 #'
 #' @keywords internal
 #' @noRd
-tti_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
+mc_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
     none <- cbind(lower = NA_real_, upper = NA_real_, se = NA_real_)
     if (is.null(clusters)) {
         return(none)
@@ -79,14 +79,14 @@ tti_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
         union(names(clusters), rep_id)
     }
     fpca <- tryCatch(
-        tti_cluster_fpca(W_sp, members, rep_id, time_id, fit$times),
+        mc_cluster_fpca(W_sp, members, rep_id, time_id, fit$times),
         error = function(e) NULL
     )
     if (is.null(fpca) || is.null(fpca$fp)) {
         return(none)
     }
 
-    ci <- tti_analytic_ci(
+    ci <- mc_analytic_ci(
         fpca$fp,
         obs_times = fpca$Lt[[rep_id]],
         obs_values = fpca$Ly[[rep_id]],
@@ -106,7 +106,7 @@ tti_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
 #' with its 95% analytic interval. Useful for filtering a completed table by
 #' how well determined each imputed value actually was.
 #'
-#' @param run An object returned by [tti_run()].
+#' @param run An object returned by [mc_run()].
 #' @param taxon Character name of the taxon, as it appears in the row names
 #'   of the abundance table.
 #'
@@ -115,21 +115,21 @@ tti_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
 #'   with the subject and time given as the caller wrote them.
 #'
 #' @examples
-#' demo <- tti_demo_data()
-#' run <- suppressWarnings(tti_run(
+#' demo <- mc_demo_data()
+#' run <- suppressWarnings(mc_run(
 #'     demo$counts, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
 #'     K = 1, verbose = FALSE
 #' ))
 #'
-#' tti_uncertainty(run, rownames(demo$counts)[1])
+#' mc_uncertainty(run, rownames(demo$counts)[1])
 #'
-#' @seealso [tti_run()], whose `out_dir` writes these as one page per value.
+#' @seealso [mc_run()], whose `out_dir` writes these as one page per value.
 #'
 #' @export
-tti_uncertainty <- function(run, taxon) {
-    if (!inherits(run, "tti_run")) {
-        stop("run must be an object returned by tti_run().", call. = FALSE)
+mc_uncertainty <- function(run, taxon) {
+    if (!inherits(run, "mc_run")) {
+        stop("run must be an object returned by mc_run().", call. = FALSE)
     }
     if (is.null(run$design)) {
         stop(
@@ -143,10 +143,10 @@ tti_uncertainty <- function(run, taxon) {
     if (!(taxon %in% known)) {
         stop(
             "No taxon called '", taxon, "' was imputed. Imputed taxa are: ",
-            tti_fmt_some(known),
+            mc_fmt_some(known),
             call. = FALSE
         )
     }
 
-    tti_taxon_uncertainty(run$fit, taxon, run$design)
+    mc_taxon_uncertainty(run$fit, taxon, run$design)
 }

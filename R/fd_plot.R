@@ -41,8 +41,8 @@ NULL
 #' The FPCA model is fitted using only subjects within the same cluster
 #' as the target subject.
 #'
-#' @param fit An object of class \code{"tti_fit"} returned by
-#'   \code{\link{tti_fit}}.
+#' @param fit An object of class \code{"mc_fit"} returned by
+#'   \code{\link{mc_fit}}.
 #'
 #' @param species_name Character. Name of the taxon (feature) to plot.
 #'
@@ -60,15 +60,15 @@ NULL
 #' @examples
 #' data(taxa_demo)
 #'
-#' prep <- tti_prepare(
+#' prep <- mc_prepare(
 #'     dat = taxa_demo,
 #'     taxon_col = "OTU_ID",
 #'     mask_list = data.frame(rep = "S01", time = 3)
 #' )
-#' fit <- suppressWarnings(tti_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, K = 1))
 #'
 #' suppressWarnings(
-#'     tti_plot(
+#'     mc_plot(
 #'         fit = fit,
 #'         species_name = fit$pred_long$species[1],
 #'         rep_id = "S01",
@@ -80,7 +80,7 @@ NULL
 #' # Bootstrap bands refit the model B times. B is small here to keep the
 #' # example quick; use a few hundred for real work.
 #' suppressWarnings(
-#'     tti_plot(
+#'     mc_plot(
 #'         fit = fit,
 #'         species_name = fit$pred_long$species[1],
 #'         rep_id = "S01",
@@ -91,10 +91,10 @@ NULL
 #' )
 #'
 #' @seealso
-#' \code{\link{tti_fit}},
-#' \code{\link{tti_ci}}
+#' \code{\link{mc_fit}},
+#' \code{\link{mc_ci}}
 #' @export
-tti_plot <- function(
+mc_plot <- function(
     fit,
     species_name,
     rep_id,
@@ -114,10 +114,10 @@ tti_plot <- function(
     cl_id <- clusters[rep_id]
     members <- names(clusters)[clusters == cl_id]
 
-    W_sp <- tti_subject_time_matrix(fit, species_name)
-    fpca <- tti_cluster_fpca(W_sp, members, rep_id, time_id, fit$times)
+    W_sp <- mc_subject_time_matrix(fit, species_name)
+    fpca <- mc_cluster_fpca(W_sp, members, rep_id, time_id, fit$times)
 
-    ci_obj <- tti_ci(
+    ci_obj <- mc_ci(
         fit = fit,
         species_name = species_name,
         rep_id = rep_id,
@@ -126,16 +126,16 @@ tti_plot <- function(
         B = B
     )
 
-    frames <- tti_plot_frames(
+    frames <- mc_plot_frames(
         fit, species_name, rep_id, time_id, W_sp, fpca, members
     )
 
-    ylim <- tti_plot_ylims(W_sp, members, outliers, fpca, ci_obj)
+    ylim <- mc_plot_ylims(W_sp, members, outliers, fpca, ci_obj)
 
-    p1 <- tti_plot_fitted_panel(
+    p1 <- mc_plot_fitted_panel(
         frames, ci_obj, rep_id, time_id, species_name, cl_id, ylim$left
     )
-    p2 <- tti_plot_raw_panel(
+    p2 <- mc_plot_raw_panel(
         W_sp, outliers, frames$mask, rep_id, time_id, ylim$right
     )
 

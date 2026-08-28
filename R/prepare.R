@@ -11,7 +11,7 @@ NULL
 #' and defines masked subject-timepoint combinations where entire samples are
 #'  missing.
 #'
-#' This function is the first step of the TaxaTimeImpute workflow. It extracts
+#' This function is the first step of the MicrobiomeCurves workflow. It extracts
 #'  replicate
 #' and time information from column names, identifies valid observations, and
 #'  constructs
@@ -83,7 +83,7 @@ NULL
 #'     time = c(3, 5)
 #' )
 #'
-#' prep <- tti_prepare(
+#' prep <- mc_prepare(
 #'     dat = taxa_demo,
 #'     taxon_col = "OTU_ID",
 #'     mask_list = mask_list
@@ -92,11 +92,11 @@ NULL
 #' prep$mask_pairs
 #' head(prep$col_map)
 #'
-#' # Use tti_run() to impute samples that are missing in the data. It
+#' # Use mc_run() to impute samples that are missing in the data. It
 #' # detects them and does not need a mask.
 #'
 #' @export
-tti_prepare <- function(
+mc_prepare <- function(
     dat,
     taxon_col = "OTU_ID",
     mask_list = NULL,
@@ -104,24 +104,24 @@ tti_prepare <- function(
     parse_fun = NULL
 ) {
     if (is.null(parse_fun)) {
-        parse_fun <- tti_parse_cols
+        parse_fun <- mc_parse_cols
     }
 
-    col_map <- tti_prepare_col_map(dat, taxon_col, parse_fun)
+    col_map <- mc_prepare_col_map(dat, taxon_col, parse_fun)
     reps <- unique(col_map$rep)
     times <- sort(unique(col_map$time))
 
-    tti_check_inputs(dat, taxon_col, col_map, reps)
+    mc_check_inputs(dat, taxon_col, col_map, reps)
 
     mask_pairs <- dplyr::distinct(
-        tti_collect_mask_pairs(mask_list, mask_matrix)
+        mc_collect_mask_pairs(mask_list, mask_matrix)
     )
     requested <- mask_pairs
     mask_pairs <- dplyr::filter(mask_pairs, rep %in% reps, time %in% times)
     if (nrow(mask_pairs) == 0) {
-        tti_stop_no_mask_pairs(requested, reps, times)
+        mc_stop_no_mask_pairs(requested, reps, times)
     }
-    tti_check_mask_coverage(mask_pairs, col_map)
+    mc_check_mask_coverage(mask_pairs, col_map)
 
     mask_pairs <- mask_pairs %>%
         dplyr::left_join(col_map, by = c("rep", "time")) %>%

@@ -1,5 +1,5 @@
 # These tests run in a session where dplyr and patchwork are NOT attached,
-# which is the condition that used to break tti_plot():
+# which is the condition that used to break mc_plot():
 #
 #   * `arrange()` was called bare, with no importFrom(dplyr, arrange)
 #   * `p1 + p2` needs patchwork's method, but patchwork sat in Imports with no
@@ -8,7 +8,7 @@
 # Both failed for any user who had not run library(dplyr) / library(patchwork)
 # first. These tests fail again if either import is dropped.
 
-test_that("tti_plot works without dplyr or patchwork attached", {
+test_that("mc_plot works without dplyr or patchwork attached", {
     skip_if_not_installed("ggplot2")
     skip_if_not_installed("patchwork")
 
@@ -18,7 +18,7 @@ test_that("tti_plot works without dplyr or patchwork attached", {
     fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
 
     p <- suppressWarnings(
-        tti_plot(
+        mc_plot(
             fit = fit,
             species_name = "Taxon01",
             rep_id = "S01",
@@ -30,12 +30,12 @@ test_that("tti_plot works without dplyr or patchwork attached", {
     expect_s3_class(p, "ggplot")
 })
 
-test_that("tti_plot rejects a species it never fitted", {
+test_that("mc_plot rejects a species it never fitted", {
     fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
 
     expect_error(
         suppressWarnings(
-            tti_plot(
+            mc_plot(
                 fit,
                 species_name = "NotATaxon", rep_id = "S01", time_id = 3
             )
@@ -48,7 +48,7 @@ test_that("analytic confidence intervals are well formed", {
     fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
 
     ci <- suppressWarnings(
-        tti_ci(
+        mc_ci(
             fit = fit,
             species_name = "Taxon01",
             rep_id = "S01",
@@ -67,10 +67,10 @@ test_that("analytic confidence intervals are well formed", {
 
 test_that("the imputed value falls inside its own analytic interval", {
     fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
-    imp <- tti_impute(fit)
+    imp <- mc_impute(fit)
 
     ci <- suppressWarnings(
-        tti_ci(fit, species_name = "Taxon01", rep_id = "S01",
+        mc_ci(fit, species_name = "Taxon01", rep_id = "S01",
             time_id = 3, method = "analytic")
     )
 

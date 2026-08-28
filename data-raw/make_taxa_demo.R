@@ -42,7 +42,7 @@ for (i in seq_along(subjects)) {
 }
 
 # ---- introduce missing whole samples --------------------------------
-# Two forms are represented, because tti_detect_missing() recognises both:
+# Two forms are represented, because mc_detect_missing() recognises both:
 #
 #   S04.2  -> column removed entirely  ("absent_column")
 #   S07.4  -> column present but all NA ("all_na")

@@ -8,21 +8,21 @@
 #' Name a column created for a subject-timepoint that had no sample
 #'
 #' @param cols Character vector of internal column names to name.
-#' @param design The `tti_design` the run was built from.
+#' @param design The `mc_design` the run was built from.
 #'
 #' @return Character vector of names, one per entry of `cols`.
 #'
 #' @keywords internal
 #' @noRd
-tti_name_added <- function(cols, design) {
-    parsed <- tti_parse_cols(cols)
+mc_name_added <- function(cols, design) {
+    parsed <- mc_parse_cols(cols)
     subject <- design$subjects[
         as.integer(sub("^s", "", parsed$rep))
     ]
     time <- design$times[parsed$time + 1L]
 
-    base <- paste0(subject, "_", tti_time_label(design$axis, time))
-    tti_make_distinct(base, design$map$sample)
+    base <- paste0(subject, "_", mc_time_label(design$axis, time))
+    mc_make_distinct(base, design$map$sample)
 }
 
 #' Make generated names distinct from the real ones
@@ -39,7 +39,7 @@ tti_name_added <- function(cols, design) {
 #'
 #' @keywords internal
 #' @noRd
-tti_make_distinct <- function(proposed, taken) {
+mc_make_distinct <- function(proposed, taken) {
     out <- proposed
     for (i in seq_along(out)) {
         candidate <- out[i]
@@ -55,7 +55,7 @@ tti_make_distinct <- function(proposed, taken) {
 
 #' Extend the metadata with a row for each created sample
 #'
-#' @param design The `tti_design` the run was built from.
+#' @param design The `mc_design` the run was built from.
 #' @param added Character vector of internal column names that were created.
 #' @param labels Character vector of the final names of every output column.
 #'
@@ -64,20 +64,20 @@ tti_make_distinct <- function(proposed, taken) {
 #'
 #' @keywords internal
 #' @noRd
-tti_extend_metadata <- function(design, added, labels) {
+mc_extend_metadata <- function(design, added, labels) {
     md <- design$metadata
     if (length(added) == 0) {
         return(md)
     }
 
-    new_names <- tti_name_added(added, design)
-    parsed <- tti_parse_cols(added)
+    new_names <- mc_name_added(added, design)
+    parsed <- mc_parse_cols(added)
 
     extra <- data.frame(
         sample = new_names,
         subject = design$subjects[as.integer(sub("^s", "", parsed$rep))],
         time = design$times[parsed$time + 1L],
-        time_label = tti_time_label(
+        time_label = mc_time_label(
             design$axis, design$times[parsed$time + 1L]
         ),
         imputed = rep(TRUE, length(added)),

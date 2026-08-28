@@ -13,7 +13,7 @@
 #'
 #' The design mirrors the BONUS cystic-fibrosis cohort analysed in the paper:
 #' 12 taxa, 10 subjects and 7 time points, with a few whole samples missing.
-#' Both forms of missingness that \code{\link{tti_detect_missing}} recognises
+#' Both forms of missingness that \code{\link{mc_detect_missing}} recognises
 #' are represented:
 #'
 #' \itemize{
@@ -27,7 +27,7 @@
 #' \code{read.csv()} entry point can be demonstrated:
 #'
 #' \preformatted{
-#' path <- system.file("extdata", "taxa_demo.csv", package = "TaxaTimeImpute")
+#' path <- system.file("extdata", "taxa_demo.csv", package = "MicrobiomeCurves")
 #' dat  <- read.csv(path, check.names = FALSE)
 #' }
 #'
@@ -55,13 +55,13 @@
 #'
 #' @usage data(taxa_demo)
 #'
-#' @seealso \code{\link{tti_run}}, \code{\link{tti_detect_missing}}
+#' @seealso \code{\link{mc_run}}, \code{\link{mc_detect_missing}}
 #'
 #' @examples
 #' data(taxa_demo)
 #'
 #' # what is missing, and why
-#' info <- tti_detect_missing(taxa_demo, taxon_col = "OTU_ID")
+#' info <- mc_detect_missing(taxa_demo, taxon_col = "OTU_ID")
 #' info$missing
 #'
 #' # observations remaining per subject

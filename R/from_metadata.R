@@ -52,7 +52,7 @@
 #'   entry.
 #' @param verbose Logical. Whether to report the design as it is built.
 #'
-#' @return An object of class `tti_design`: a list with the converted
+#' @return An object of class `mc_design`: a list with the converted
 #'   `table`, the `map` from internal column names back to sample names, the
 #'   `metadata`, `missing`, `observed`, `subjects`, `times`, the time `axis`
 #'   and `taxon_col`.
@@ -72,7 +72,7 @@
 #'     Day = c(0, 7, 0)
 #' )
 #'
-#' design <- tti_from_metadata(
+#' design <- mc_from_metadata(
 #'     counts, meta,
 #'     sample_col = "SampleID", subject_col = "SubjectID",
 #'     time_col = "Day",
@@ -80,30 +80,30 @@
 #' )
 #' design$missing
 #'
-#' @seealso [tti_run()], which accepts the same arguments and returns results
+#' @seealso [mc_run()], which accepts the same arguments and returns results
 #'   under the original sample names.
 #'
 #' @export
-tti_from_metadata <- function(abundance, metadata,
+mc_from_metadata <- function(abundance, metadata,
                               sample_col, subject_col, time_col,
                               abundance_type = c("clr", "raw"),
                               pseudocount = "auto",
                               verbose = TRUE) {
     abundance_type <- match.arg(abundance_type)
-    tti_check_pseudocount(pseudocount)
+    mc_check_pseudocount(pseudocount)
     say <- function(...) if (isTRUE(verbose)) message(...)
 
-    ab <- tti_abundance_parts(abundance)
-    md <- tti_metadata_parts(
+    ab <- mc_abundance_parts(abundance)
+    md <- mc_metadata_parts(
         metadata, sample_col, subject_col, time_col, colnames(ab$mat)
     )
 
     if (identical(abundance_type, "raw")) {
         say("Transforming raw abundances to centred log-ratios.")
-        ab$mat <- tti_clr(ab$mat, pseudocount)
+        ab$mat <- mc_clr(ab$mat, pseudocount)
     }
 
-    design <- tti_build_design(ab, md, say)
-    tti_report_design(design, say)
+    design <- mc_build_design(ab, md, say)
+    mc_report_design(design, say)
     design
 }

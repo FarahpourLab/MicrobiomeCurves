@@ -9,11 +9,11 @@
 #' imputed values, and squared errors for all masked subject-timepoint
 #'  combinations.
 #'
-#' It is typically used after \code{\link{tti_fit}} to retrieve
+#' It is typically used after \code{\link{mc_fit}} to retrieve
 #' imputation results for downstream analysis or evaluation.
 #'
-#' @param fit An object of class \code{"tti_fit"} returned by
-#'   \code{\link{tti_fit}}.
+#' @param fit An object of class \code{"mc_fit"} returned by
+#'   \code{\link{mc_fit}}.
 #'
 #' @return A data frame with columns:
 #' \itemize{
@@ -30,27 +30,27 @@
 #' @examples
 #' data(taxa_demo)
 #'
-#' prep <- tti_prepare(
+#' prep <- mc_prepare(
 #'     dat = taxa_demo,
 #'     taxon_col = "OTU_ID",
 #'     mask_list = data.frame(rep = "S01", time = 3)
 #' )
 #'
-#' fit <- suppressWarnings(tti_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, K = 1))
 #'
-#' imputed <- tti_impute(fit)
+#' imputed <- mc_impute(fit)
 #'
 #' head(imputed[, c("species", "rep", "time", "true_value", "imputed_value")])
 #'
 #' @seealso
-#' \code{\link{tti_fit}},
-#' \code{\link{tti_metrics}}
+#' \code{\link{mc_fit}},
+#' \code{\link{mc_metrics}}
 #'
 #' @export
-tti_impute <- function(fit) {
+mc_impute <- function(fit) {
 
-    if (!inherits(fit, "tti_fit")) {
-        stop("Input must be an object returned by tti_fit()")
+    if (!inherits(fit, "mc_fit")) {
+        stop("Input must be an object returned by mc_fit()")
     }
 
     fit$pred_long

@@ -11,7 +11,7 @@ visit, or a library fails quality control, and the affected subject-timepoint
 is absent from the abundance table. Removing those subjects discards usable
 data, and leaving the gap affects any downstream calculation.
 
-`r Biocpkg("TaxaTimeImpute")` estimates the missing values. It models each
+`r Biocpkg("MicrobiomeCurves")` estimates the missing values. It models each
 taxon's abundance over time as a smooth curve and shares information across
 subjects using Functional Principal Component Analysis (FPCA) in the PACE
 formulation. The covariance surface is estimated from all subjects together,
@@ -24,7 +24,7 @@ and `NA` for others is a different problem, and is reported as an error rather
 than imputed.
 
 ```{r load}
-library(TaxaTimeImpute)
+library(MicrobiomeCurves)
 data(taxa_demo)
 ```
 
@@ -39,17 +39,17 @@ encoded in a column name.
 The bundled example is available in exactly that form:
 
 ```{r own-tables}
-demo <- tti_demo_data()
+demo <- mc_demo_data()
 
 demo$counts[1:3, 1:4]
 head(demo$metadata, 4)
 ```
 
-`tti_from_metadata()` converts the two into the form the model needs and
+`mc_from_metadata()` converts the two into the form the model needs and
 reports what the design is missing:
 
 ```{r own-design}
-design <- tti_from_metadata(
+design <- mc_from_metadata(
     demo$counts, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time"
 )
@@ -75,7 +75,7 @@ lab$time <- factor(
     levels = paste0("visit", sort(unique(lab$time)))
 )
 
-d2 <- suppressWarnings(tti_from_metadata(
+d2 <- suppressWarnings(mc_from_metadata(
     demo$counts, lab,
     sample_col = "sample", subject_col = "subject", time_col = "time",
     verbose = FALSE
@@ -103,7 +103,7 @@ relative abundances, say so and the transformation is done here, replacing
 zeros first:
 
 ```{r raw, eval = FALSE}
-run <- tti_run(
+run <- mc_run(
     counts, meta,
     sample_col = "library", subject_col = "animal", time_col = "day",
     abundance_type = "raw"
@@ -121,8 +121,8 @@ Give `out_dir` and the run writes three things:
 | `uncertainty_by_taxon.pdf` | one page per taxon, with intervals |
 
 ```{r outdir}
-out <- file.path(tempdir(), "tti_example")
-run <- suppressWarnings(tti_run(
+out <- file.path(tempdir(), "mc_example")
+run <- suppressWarnings(mc_run(
     demo$counts, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
     out_dir = out, K = 1, verbose = FALSE
@@ -138,7 +138,7 @@ data. Each page shows every value imputed for one taxon with its interval, so
 a taxon whose gaps rest on very little information declares itself:
 
 ```{r unc}
-tti_uncertainty(run, rownames(demo$counts)[1])
+mc_uncertainty(run, rownames(demo$counts)[1])
 ```
 
 `plots = FALSE` turns the drawing off. `plot_format = "png"` (or `"both"`)
@@ -161,7 +161,7 @@ run$metadata[run$metadata$imputed, ]
 
 # The internal layout
 
-The fitting functions `tti_prepare()`, `tti_fit()` and `tti_impute()` work on
+The fitting functions `mc_prepare()`, `mc_fit()` and `mc_impute()` work on
 a wide table whose sample columns are named `<subject>.<time>`. That is the
 benchmarking route, described later, and the form `taxa_demo` is stored in:
 
@@ -177,7 +177,7 @@ carries both forms of missingness the package recognises.
 Before fitting anything, ask what the table is actually missing:
 
 ```{r detect}
-info <- tti_detect_missing(taxa_demo, taxon_col = "OTU_ID")
+info <- mc_detect_missing(taxa_demo, taxon_col = "OTU_ID")
 info$missing
 ```
 
@@ -209,7 +209,7 @@ head(info$observed)
 
 # Imputing a table
 
-`tti_run()` does the whole job: it converts the tables, reports what is
+`mc_run()` does the whole job: it converts the tables, reports what is
 missing, fits the model, and returns the table with the gaps filled. It was
 run above; the pieces of its result are:
 
@@ -235,18 +235,18 @@ is not an error.
 # Working with SummarizedExperiment
 
 Most Bioconductor microbiome workflows carry data in a
-`r Biocpkg("TreeSummarizedExperiment")`. `tti_run()` has a method for that,
+`r Biocpkg("TreeSummarizedExperiment")`. `mc_run()` has a method for that,
 reading subject and time from `colData`:
 
 ```{r se, message = FALSE}
 library(SummarizedExperiment)
 
-se <- tti_as_demo_se()
+se <- mc_as_demo_se()
 se
 ```
 
 ```{r se-run}
-out <- tti_run(
+out <- mc_run(
     se,
     subject_col = "subject",
     time_col = "timepoint",
@@ -267,8 +267,8 @@ assay(out, "imputed")[seq_len(3), seq_len(4)]
 What happened is recorded in the object's metadata:
 
 ```{r se-meta}
-metadata(out)$tti_run$missing
-metadata(out)$tti_run$added_samples
+metadata(out)$mc_run$missing
+metadata(out)$mc_run$added_samples
 ```
 
 If a subject-timepoint had no sample at all, there is no column to write the
@@ -282,17 +282,17 @@ contain dots or spaces and time points need not be integers or evenly spaced.
 
 To measure accuracy you need ground truth, so you hide values you already
 have and score the predictions. That is a different entry point:
-`tti_prepare()` takes an explicit mask.
+`mc_prepare()` takes an explicit mask.
 
 ```{r bench}
-prep <- tti_prepare(
+prep <- mc_prepare(
     dat = taxa_demo,
     taxon_col = "OTU_ID",
     mask_list = data.frame(rep = "S01", time = 3)
 )
 
-fit <- tti_fit(prep, K = 1)
-imputed <- tti_impute(fit)
+fit <- mc_fit(prep, K = 1)
+imputed <- mc_impute(fit)
 
 head(imputed[, c("species", "true_value", "imputed_value")])
 ```
@@ -300,20 +300,20 @@ head(imputed[, c("species", "true_value", "imputed_value")])
 Now `true_value` is populated, so error metrics mean something:
 
 ```{r metrics}
-metrics <- tti_metrics(fit)
+metrics <- mc_metrics(fit)
 c(MSE = metrics$MSE_overall, RMSE = metrics$RMSE_overall)
 ```
 
-After `tti_run()` the true values were never observed, so `true_value` and
-`se` are `NA` and `tti_metrics()` is not meaningful. The two entry points
+After `mc_run()` the true values were never observed, so `true_value` and
+`se` are `NA` and `mc_metrics()` is not meaningful. The two entry points
 answer different questions.
 
 # Uncertainty
 
-`tti_ci()` propagates the FPCA score covariance to an analytic interval:
+`mc_ci()` propagates the FPCA score covariance to an analytic interval:
 
 ```{r ci}
-ci <- tti_ci(
+ci <- mc_ci(
     fit = fit,
     species_name = imputed$species[1],
     rep_id = "S01",
@@ -327,7 +327,7 @@ head(ci$analytic)
 A bootstrap interval is also available via `method = "bootstrap"`, which
 refits the model `B` times and is correspondingly slower.
 
-`tti_plot()` draws the trajectory with its band, the observed points, and the
+`mc_plot()` draws the trajectory with its band, the observed points, and the
 imputed value:
 
 ```{r alt}
@@ -338,7 +338,7 @@ alt_text <- paste(
 ```
 
 ```{r plot, fig.alt = alt_text}
-tti_plot(
+mc_plot(
     fit = fit,
     species_name = imputed$species[1],
     rep_id = "S01",
@@ -367,7 +367,7 @@ Reading it:
 
 # Optional refinements
 
-Two refinements are available, both switched through `tti_fit()`:
+Two refinements are available, both switched through `mc_fit()`:
 
 * **Functional outlier screening** (`use_outliers = TRUE`, the default) drops
   trajectories below the 5% Fraiman-Muniz depth quantile before refitting. The
@@ -383,7 +383,7 @@ diagnostic options, not as default improvements.
 
 # Reproducibility
 
-`tti_fit()` takes a `seed`, and clustering is reproducible for a given seed.
+`mc_fit()` takes a `seed`, and clustering is reproducible for a given seed.
 The caller's own random stream is restored when the function returns, so
 calling it does not disturb any other random draws in your session.
 

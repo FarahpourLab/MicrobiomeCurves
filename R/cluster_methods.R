@@ -15,7 +15,7 @@
 # kmeans.fd() needs a reasonable number of curves and fails outright on very
 # small sets, which is common here once outliers are dropped. Rather than
 # lose the taxon, that case falls back to the score-based route and is
-# counted so tti_fit() can report how often it happened.
+# counted so mc_fit() can report how often it happened.
 
 #' Assign subjects to clusters
 #'
@@ -30,13 +30,13 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_assign_clusters <- function(fp, scores, k_use, subjects, method) {
+mc_assign_clusters <- function(fp, scores, k_use, subjects, method) {
     if (identical(method, "kmeans_fd")) {
-        cl <- tti_kmeans_fd(fp, k_use, subjects)
+        cl <- mc_kmeans_fd(fp, k_use, subjects)
         if (!is.null(cl)) {
             return(cl)
         }
-        tti_diag_bump("kfd_fallback")
+        mc_diag_bump("kfd_fallback")
     }
 
     km <- kmeans(scores, centers = k_use, nstart = 20)
@@ -62,7 +62,7 @@ tti_assign_clusters <- function(fp, scores, k_use, subjects, method) {
 #'
 #' @keywords internal
 #' @noRd
-tti_kmeans_fd <- function(fp, k_use, subjects) {
+mc_kmeans_fd <- function(fp, k_use, subjects) {
     if (!requireNamespace("fda.usc", quietly = TRUE)) {
         stop(
             "Package 'fda.usc' is required for cluster_method = ",

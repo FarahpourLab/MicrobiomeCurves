@@ -1,0 +1,26 @@
+---
+title: "Imputing missing timepoints in longitudinal microbiome data"
+author:
+- name: Alireza Dostmohammadi
+  email: alireza.dostmohammadi@uni-due.de
+package: MicrobiomeCurves
+output:
+  BiocStyle::html_document:
+    toc_float: true
+vignette: >
+  %\VignetteIndexEntry{Imputing missing microbiome timepoints}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+    collapse = TRUE,
+    comment = "#>",
+    fig.width = 7,
+    fig.height = 4
+)
+```
+
+```{r body, child = "../inst/vignette-body/workflow-body.Rmd"}
+```

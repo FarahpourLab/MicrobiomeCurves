@@ -1,8 +1,8 @@
 skip_if_not_installed("SummarizedExperiment")
 skip_if_not_installed("TreeSummarizedExperiment")
 
-test_that("tti_as_demo_se builds a rectangular object", {
-    se <- tti_as_demo_se()
+test_that("mc_as_demo_se builds a rectangular object", {
+    se <- mc_as_demo_se()
 
     expect_s4_class(se, "TreeSummarizedExperiment")
     expect_equal(nrow(se), 12)
@@ -15,9 +15,9 @@ test_that("tti_as_demo_se builds a rectangular object", {
 })
 
 test_that("imputing a SummarizedExperiment adds an assay, not replaces one", {
-    se <- tti_as_demo_se()
+    se <- mc_as_demo_se()
     out <- suppressWarnings(
-        tti_run(se, subject_col = "subject", time_col = "timepoint",
+        mc_run(se, subject_col = "subject", time_col = "timepoint",
             K = 1, verbose = FALSE)
     )
 
@@ -35,14 +35,14 @@ test_that("imputing a SummarizedExperiment adds an assay, not replaces one", {
 
 test_that("the container route agrees with the table route", {
     # Both entry points must give the same values.
-    se <- tti_as_demo_se()
+    se <- mc_as_demo_se()
     out <- suppressWarnings(
-        tti_run(se, subject_col = "subject", time_col = "timepoint",
+        mc_run(se, subject_col = "subject", time_col = "timepoint",
             K = 1, seed = 123, verbose = FALSE)
     )
     imp <- SummarizedExperiment::assay(out, "imputed")
 
-    tab <- tti_demo_table()
+    tab <- mc_demo_table()
     run <- suppressWarnings(
         run_wide_as_meta(tab, K = 1, seed = 123, verbose = FALSE)
     )
@@ -50,11 +50,13 @@ test_that("the container route agrees with the table route", {
     # The two routes name their columns differently, so align them on the
     # subject and time each column stands for before comparing.
     cd <- SummarizedExperiment::colData(out)
-    se_key <- paste(cd$subject, cd$timepoint, sep = "")
+    se_key <- paste(cd$subject, cd$timepoint, sep = "
+")
 
     run_key <- paste(
         run$metadata$subject, run$metadata$time,
-        sep = ""
+        sep = "
+"
     )
     cols <- setdiff(names(run$completed), "taxon")
     run_key <- run_key[match(cols, run$metadata$sample)]

@@ -10,9 +10,9 @@
 #' would also silently reset the caller's own random stream, which is why
 #' Bioconductor asks packages not to do it.
 #'
-#' `tti_reset_rng()` produces exactly the RNG state that `set.seed(seed)`
+#' `mc_reset_rng()` produces exactly the RNG state that `set.seed(seed)`
 #' produces, including the stream left behind for subsequent draws, and
-#' `tti_preserve_rng()` restores whatever stream the caller had once the
+#' `mc_preserve_rng()` restores whatever stream the caller had once the
 #' calling function returns. Together they keep results identical to earlier
 #' versions of this code while leaving the caller's stream untouched across
 #' the call.
@@ -23,7 +23,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_reset_rng <- function(seed) {
+mc_reset_rng <- function(seed) {
     state <- withr::with_seed(
         seed,
         get(".Random.seed", envir = globalenv())
@@ -43,9 +43,9 @@ tti_reset_rng <- function(seed) {
 #'
 #' @keywords internal
 #' @noRd
-tti_demo_table <- function() {
+mc_demo_table <- function() {
     env <- new.env(parent = emptyenv())
-    utils::data("taxa_demo", package = "TaxaTimeImpute", envir = env)
+    utils::data("taxa_demo", package = "MicrobiomeCurves", envir = env)
     env$taxa_demo
 }
 
@@ -57,7 +57,7 @@ tti_demo_table <- function() {
 #'
 #' @keywords internal
 #' @noRd
-tti_preserve_rng <- function(frame = parent.frame()) {
+mc_preserve_rng <- function(frame = parent.frame()) {
     withr::local_preserve_seed(.local_envir = frame)
     invisible(NULL)
 }

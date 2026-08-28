@@ -21,8 +21,8 @@ NULL
 #' simulation studies or cross-validation settings where true values
 #' are known.
 #'
-#' @param fit An object of class \code{"tti_fit"} returned by
-#'   \code{\link{tti_fit}}.
+#' @param fit An object of class \code{"mc_fit"} returned by
+#'   \code{\link{mc_fit}}.
 #'
 #' @return A list containing:
 #' \itemize{
@@ -35,35 +35,35 @@ NULL
 #' data(taxa_demo)
 #'
 #' # Metrics are only meaningful when the true values are known, i.e. after
-#' # masking values on purpose. They are NA for a tti_run() fit, where the
+#' # masking values on purpose. They are NA for a mc_run() fit, where the
 #' # missing values were never observed.
-#' prep <- tti_prepare(
+#' prep <- mc_prepare(
 #'     dat = taxa_demo,
 #'     taxon_col = "OTU_ID",
 #'     mask_list = data.frame(rep = "S01", time = 3)
 #' )
 #'
-#' fit <- suppressWarnings(tti_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, K = 1))
 #'
-#' metrics <- tti_metrics(fit)
+#' metrics <- mc_metrics(fit)
 #'
 #' metrics$MSE_overall
 #' metrics$RMSE_overall
 #' head(metrics$MSE_by_point)
 #'
 #' @seealso
-#' \code{\link{tti_fit}}
+#' \code{\link{mc_fit}}
 #'
 #' @export
-tti_metrics <- function(fit) {
+mc_metrics <- function(fit) {
 
-    if (!inherits(fit, "tti_fit")) {
-        stop("Input must be an object returned by tti_fit()")
+    if (!inherits(fit, "mc_fit")) {
+        stop("Input must be an object returned by mc_fit()")
     }
 
     pred_long <- fit$pred_long
 
-    # A fit from tti_run() imputes samples that were absent from the table,
+    # A fit from mc_run() imputes samples that were absent from the table,
     # so there is no held-out truth to score against and every error is NA.
     # Without this the caller silently receives NaN.
     if (all(is.na(pred_long$true_value))) {
@@ -72,7 +72,7 @@ tti_metrics <- function(fit) {
             "imputes samples that were missing from the data, which have no ",
             "known value to compare against. Accuracy can only be measured ",
             "on a fit whose masked cells were observed, as produced by ",
-            "tti_prepare() with mask_list or mask_matrix.",
+            "mc_prepare() with mask_list or mask_matrix.",
             call. = FALSE
         )
     }

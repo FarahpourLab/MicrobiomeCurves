@@ -36,7 +36,7 @@ study <- function(drop = NULL, blank = NULL) {
 }
 
 build <- function(s, ...) {
-    tti_from_metadata(
+    mc_from_metadata(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         verbose = FALSE, ...
@@ -45,7 +45,7 @@ build <- function(s, ...) {
 
 test_that("a complete design reports nothing missing", {
     d <- build(study())
-    expect_s3_class(d, "tti_design")
+    expect_s3_class(d, "mc_design")
     expect_equal(nrow(d$missing), 0)
     expect_equal(length(d$subjects), 5)
     expect_equal(d$times, c(0, 7, 14))
@@ -77,7 +77,7 @@ test_that("both kinds of gap are found together", {
 test_that("the metadata columns may be called anything", {
     s <- study()
     names(s$metadata) <- c("Run_ID", "cage_animal", "hours_post_gavage")
-    d <- tti_from_metadata(
+    d <- mc_from_metadata(
         s$abundance, s$metadata,
         sample_col = "Run_ID", subject_col = "cage_animal",
         time_col = "hours_post_gavage", verbose = FALSE
@@ -123,7 +123,7 @@ test_that("mismatches between the two tables are named", {
     bad <- s$metadata
     bad$sample <- sub("^RUN", "XXX", bad$sample)
     expect_error(
-        tti_from_metadata(s$abundance, bad,
+        mc_from_metadata(s$abundance, bad,
             sample_col = "sample", subject_col = "subject",
             time_col = "day", verbose = FALSE
         ),
@@ -132,7 +132,7 @@ test_that("mismatches between the two tables are named", {
 
     short <- s$metadata[-1, ]
     expect_error(
-        tti_from_metadata(s$abundance, short,
+        mc_from_metadata(s$abundance, short,
             sample_col = "sample", subject_col = "subject",
             time_col = "day", verbose = FALSE
         ),
@@ -143,7 +143,7 @@ test_that("mismatches between the two tables are named", {
 test_that("a misnamed metadata column says which argument named it", {
     s <- study()
     expect_error(
-        tti_from_metadata(s$abundance, s$metadata,
+        mc_from_metadata(s$abundance, s$metadata,
             sample_col = "sample", subject_col = "mouse",
             time_col = "day", verbose = FALSE
         ),
@@ -189,9 +189,9 @@ test_that("a time column with one distinct value is refused", {
     expect_error(build(s), "at least two")
 })
 
-test_that("tti_run returns the caller's sample names", {
+test_that("mc_run returns the caller's sample names", {
     s <- study(drop = list("M03", 7), blank = list("M02", 14))
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
@@ -210,7 +210,7 @@ test_that("tti_run returns the caller's sample names", {
 
 test_that("observed values are not modified", {
     s <- study(drop = list("M03", 7))
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
@@ -225,7 +225,7 @@ test_that("observed values are not modified", {
 
 test_that("completed columns are ordered by subject then time", {
     s <- study(drop = list("M03", 7))
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
@@ -247,7 +247,7 @@ test_that("completed columns are ordered by subject then time", {
 test_that("metadata requires all three column arguments", {
     s <- study()
     expect_error(
-        tti_run(s$abundance, metadata = s$metadata, sample_col = "sample"),
+        mc_run(s$abundance, metadata = s$metadata, sample_col = "sample"),
         "must all be named"
     )
 })
@@ -255,7 +255,7 @@ test_that("metadata requires all three column arguments", {
 test_that("the design reports itself when verbose", {
     s <- study(drop = list("M03", 7))
     expect_message(
-        tti_from_metadata(
+        mc_from_metadata(
             s$abundance, s$metadata,
             sample_col = "sample", subject_col = "subject",
             time_col = "day", verbose = TRUE
@@ -266,7 +266,7 @@ test_that("the design reports itself when verbose", {
 
 test_that("the long table uses the caller's subject and sample names", {
     s <- study(drop = list("M03", 7))
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
@@ -279,8 +279,8 @@ test_that("the long table uses the caller's subject and sample names", {
     expect_true(all(run$imputed$time %in% s$days))
 })
 
-test_that("tti_demo_data returns the bundled example in study form", {
-    demo <- tti_demo_data()
+test_that("mc_demo_data returns the bundled example in study form", {
+    demo <- mc_demo_data()
 
     # Taxa in the row names, arbitrary sample names, one metadata row each.
     expect_true(is.matrix(demo$counts))
@@ -289,12 +289,12 @@ test_that("tti_demo_data returns the bundled example in study form", {
     expect_setequal(demo$metadata$sample, colnames(demo$counts))
     expect_false(any(grepl(".", colnames(demo$counts), fixed = TRUE)))
 
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         K = 1, verbose = FALSE
     ))
-    expect_s3_class(run, "tti_run")
+    expect_s3_class(run, "mc_run")
     expect_equal(nrow(run$missing), 3)
 })
 
@@ -303,7 +303,7 @@ test_that("raw counts are CLR-transformed on the way in", {
     counts <- round(exp(s$abundance) * 100)
 
     clr_run <- build(list(abundance = counts, metadata = s$metadata))
-    raw_run <- tti_from_metadata(
+    raw_run <- mc_from_metadata(
         counts, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         abundance_type = "raw", verbose = FALSE
@@ -325,7 +325,7 @@ test_that("zeros are replaced rather than producing infinities", {
     counts <- round(exp(s$abundance) * 100)
     counts[1, ] <- 0
 
-    d <- tti_from_metadata(
+    d <- mc_from_metadata(
         counts, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         abundance_type = "raw", verbose = FALSE
@@ -337,7 +337,7 @@ test_that("zeros are replaced rather than producing infinities", {
 test_that("a negative abundance is refused as raw", {
     s <- study()
     expect_error(
-        tti_from_metadata(
+        mc_from_metadata(
             s$abundance, s$metadata,
             sample_col = "sample", subject_col = "subject",
             time_col = "day", abundance_type = "raw", verbose = FALSE
@@ -348,10 +348,10 @@ test_that("a negative abundance is refused as raw", {
 
 test_that("out_dir writes the completed table and a run log", {
     s <- study(drop = list("M03", 7))
-    out <- file.path(tempdir(), "tti_out_test")
+    out <- file.path(tempdir(), "mc_out_test")
     unlink(out, recursive = TRUE)
 
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         out_dir = out, K = 1, verbose = FALSE
@@ -384,10 +384,10 @@ test_that("the log records label time points as the user wrote them", {
         paste0("visit", s$metadata$day),
         levels = c("visit0", "visit7", "visit14")
     )
-    out <- file.path(tempdir(), "tti_out_labels")
+    out <- file.path(tempdir(), "mc_out_labels")
     unlink(out, recursive = TRUE)
 
-    suppressWarnings(tti_run(
+    suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         out_dir = out, K = 1, verbose = FALSE
@@ -402,10 +402,10 @@ test_that("the log records label time points as the user wrote them", {
 
 test_that("uncertainty plotting can be turned off and switched to png", {
     s <- study(drop = list("M03", 7))
-    out <- file.path(tempdir(), "tti_plots_off")
+    out <- file.path(tempdir(), "mc_plots_off")
     unlink(out, recursive = TRUE)
 
-    off <- suppressWarnings(tti_run(
+    off <- suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         out_dir = out, plots = FALSE, K = 1, verbose = FALSE
@@ -414,9 +414,9 @@ test_that("uncertainty plotting can be turned off and switched to png", {
     expect_false(any(grepl("uncertainty", off$files)))
     unlink(out, recursive = TRUE)
 
-    png_out <- file.path(tempdir(), "tti_plots_png")
+    png_out <- file.path(tempdir(), "mc_plots_png")
     unlink(png_out, recursive = TRUE)
-    both <- suppressWarnings(tti_run(
+    both <- suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         out_dir = png_out, plot_format = "png", dpi = 150,
@@ -431,7 +431,7 @@ test_that("uncertainty plotting can be turned off and switched to png", {
 test_that("dpi is validated", {
     s <- study(drop = list("M03", 7))
     expect_error(
-        tti_run(
+        mc_run(
             s$abundance, s$metadata,
             sample_col = "sample", subject_col = "subject",
             time_col = "day", out_dir = tempdir(), dpi = -1,
@@ -442,8 +442,8 @@ test_that("dpi is validated", {
 })
 
 test_that("every imputed cell gets an interval, screened-out subjects too", {
-    demo <- tti_demo_data()
-    run <- suppressWarnings(tti_run(
+    demo <- mc_demo_data()
+    run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         K = 1, verbose = FALSE
@@ -451,7 +451,7 @@ test_that("every imputed cell gets an interval, screened-out subjects too", {
 
     unc <- do.call(rbind, lapply(
         unique(run$fit$pred_long$species),
-        function(sp) tti_taxon_uncertainty(run$fit, sp, run$design)
+        function(sp) mc_taxon_uncertainty(run$fit, sp, run$design)
     ))
 
     expect_equal(nrow(unc), nrow(run$fit$pred_long))
@@ -462,15 +462,15 @@ test_that("every imputed cell gets an interval, screened-out subjects too", {
     expect_true(all(unc$upper >= unc$imputed))
 })
 
-test_that("tti_uncertainty returns the interval behind each imputed value", {
-    demo <- tti_demo_data()
-    run <- suppressWarnings(tti_run(
+test_that("mc_uncertainty returns the interval behind each imputed value", {
+    demo <- mc_demo_data()
+    run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         K = 1, verbose = FALSE
     ))
 
-    u <- tti_uncertainty(run, rownames(demo$counts)[1])
+    u <- mc_uncertainty(run, rownames(demo$counts)[1])
     expect_s3_class(u, "data.frame")
     expect_equal(nrow(u), nrow(run$missing))
     expect_true(all(
@@ -479,30 +479,30 @@ test_that("tti_uncertainty returns the interval behind each imputed value", {
     expect_true(all(u$lower <= u$imputed & u$imputed <= u$upper))
     expect_true(all(u$subject %in% run$design$subjects))
 
-    expect_error(tti_uncertainty(run, "not_a_taxon"), "No taxon called")
-    expect_error(tti_uncertainty(list(), "x"), "must be an object")
+    expect_error(mc_uncertainty(run, "not_a_taxon"), "No taxon called")
+    expect_error(mc_uncertainty(list(), "x"), "must be an object")
 })
 
 test_that("the uncertainty panel reflects whether screening was on", {
-    demo <- tti_demo_data()
+    demo <- mc_demo_data()
     sp <- rownames(demo$counts)[1]
 
-    on <- suppressWarnings(tti_run(
+    on <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         use_outliers = TRUE, K = 1, verbose = FALSE
     ))
-    off <- suppressWarnings(tti_run(
+    off <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         use_outliers = FALSE, K = 1, verbose = FALSE
     ))
 
-    pd_on <- suppressWarnings(TaxaTimeImpute:::tti_panel_data(
+    pd_on <- suppressWarnings(MicrobiomeCurves:::mc_panel_data(
         on$fit, sp, on$fit$pred_long$rep[1], on$fit$pred_long$time[1],
         on$design, TRUE
     ))
-    pd_off <- suppressWarnings(TaxaTimeImpute:::tti_panel_data(
+    pd_off <- suppressWarnings(MicrobiomeCurves:::mc_panel_data(
         off$fit, sp, off$fit$pred_long$rep[1], off$fit$pred_long$time[1],
         off$design, FALSE
     ))
@@ -529,8 +529,8 @@ test_that("the uncertainty panel reflects whether screening was on", {
 })
 
 test_that("a taxon gets one page, with its imputed values as facets", {
-    demo <- tti_demo_data()
-    run <- suppressWarnings(tti_run(
+    demo <- mc_demo_data()
+    run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         K = 1, verbose = FALSE
@@ -540,7 +540,7 @@ test_that("a taxon gets one page, with its imputed values as facets", {
     cells <- sum(run$fit$pred_long$species == taxa[1])
     expect_gt(cells, 1)
 
-    pages <- suppressWarnings(TaxaTimeImpute:::tti_taxon_pages(
+    pages <- suppressWarnings(MicrobiomeCurves:::mc_taxon_pages(
         run$fit, taxa[1], run$design, isTRUE(run$fit$use_outliers)
     ))
     # Several imputed values, still one page.
@@ -566,7 +566,7 @@ test_that("a taxon with many imputed values spills onto further pages", {
         nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
     )
 
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         counts, meta,
         sample_col = "SampleID", subject_col = "SubjectID",
         time_col = "Day", K = 1, verbose = FALSE
@@ -574,7 +574,7 @@ test_that("a taxon with many imputed values spills onto further pages", {
 
     sp <- unique(run$fit$pred_long$species)[1]
     cells <- sum(run$fit$pred_long$species == sp)
-    pages <- suppressWarnings(TaxaTimeImpute:::tti_taxon_pages(
+    pages <- suppressWarnings(MicrobiomeCurves:::mc_taxon_pages(
         run$fit, sp, run$design, isTRUE(run$fit$use_outliers)
     ))
 
@@ -585,10 +585,10 @@ test_that("a taxon with many imputed values spills onto further pages", {
 
 test_that("a large page count is warned about, not silently produced", {
     expect_warning(
-        TaxaTimeImpute:::tti_warn_page_count(833, 45),
+        MicrobiomeCurves:::mc_warn_page_count(833, 45),
         "plots = FALSE"
     )
-    expect_no_warning(TaxaTimeImpute:::tti_warn_page_count(10, 2))
+    expect_no_warning(MicrobiomeCurves:::mc_warn_page_count(10, 2))
 })
 
 test_that("the fit uses the order of time points, not their values", {
@@ -613,7 +613,7 @@ test_that("the fit uses the order of time points, not their values", {
             rnorm(length(taxa) * nrow(meta)),
             nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
         )
-        suppressWarnings(tti_run(
+        suppressWarnings(mc_run(
             m, meta,
             sample_col = "SampleID", subject_col = "SubjectID",
             time_col = "Day", K = 1, verbose = FALSE
@@ -625,7 +625,7 @@ test_that("the fit uses the order of time points, not their values", {
 
     # Documented behaviour: the encoding replaces each time by its rank, so
     # spacing does not reach the model. If this ever stops being true the
-    # documentation in ?tti_run must change with it.
+    # documentation in ?mc_run must change with it.
     expect_equal(even$imputed$imputed_value, uneven$imputed$imputed_value)
 
     # The values themselves are still carried, for reporting and naming.
@@ -655,13 +655,13 @@ test_that("an uncertainty page is drawn in model time, labelled with values", {
         nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
     )
 
-    run <- suppressWarnings(tti_run(
+    run <- suppressWarnings(mc_run(
         counts, meta,
         sample_col = "SampleID", subject_col = "SubjectID",
         time_col = "Day", K = 1, verbose = FALSE
     ))
 
-    pd <- suppressWarnings(TaxaTimeImpute:::tti_panel_data(
+    pd <- suppressWarnings(MicrobiomeCurves:::mc_panel_data(
         run$fit, "Akkermansia", run$fit$pred_long$rep[1],
         run$fit$pred_long$time[1], run$design, TRUE
     ))

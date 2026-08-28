@@ -2,7 +2,7 @@
 #
 # These values were produced by the original package (published as
 # LongMiImpute) and verified to be bit-for-bit identical after the rename to
-# TaxaTimeImpute. They pin the numbers the imputation returns for a fixed
+# MicrobiomeCurves. They pin the numbers the imputation returns for a fixed
 # input, mask and seed.
 #
 # These tests fail if a change to the FPCA, CI, clustering or outlier code
@@ -23,7 +23,7 @@ test_that("imputed values for a fixed mask and seed have not changed", {
     )
 
     fit <- quiet_fit(demo_prep(), K = 1, use_outliers = TRUE, seed = 123)
-    got <- tti_impute(fit)
+    got <- mc_impute(fit)
 
     expect_equal(got$species, sprintf("Taxon%02d", 1:12))
     expect_equal(got$imputed_value, expected_imputed, tolerance = 1e-6)
@@ -31,30 +31,30 @@ test_that("imputed values for a fixed mask and seed have not changed", {
 
 test_that("the true values recovered at the masked cell are the input values", {
     fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
-    got <- tti_impute(fit)
+    got <- mc_impute(fit)
 
     expect_equal(got$true_value, taxa_demo[["S01.3"]], tolerance = 1e-12)
 })
 
 test_that("squared error is consistent with true and imputed values", {
     fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
-    got <- tti_impute(fit)
+    got <- mc_impute(fit)
 
     expect_equal(
         got$se, (got$true_value - got$imputed_value)^2, tolerance = 1e-12
     )
 })
 
-test_that("tti_metrics agrees with the long table it summarises", {
+test_that("mc_metrics agrees with the long table it summarises", {
     fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
-    got <- tti_impute(fit)
-    m <- tti_metrics(fit)
+    got <- mc_impute(fit)
+    m <- mc_metrics(fit)
 
     expect_equal(m$MSE_overall, mean(got$se), tolerance = 1e-12)
     expect_equal(m$RMSE_overall, sqrt(m$MSE_overall), tolerance = 1e-12)
 })
 
-test_that("tti_run output for the bundled data has not changed", {
+test_that("mc_run output for the bundled data has not changed", {
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1, seed = 123)
 
     expect_equal(
@@ -77,8 +77,8 @@ test_that("results are reproducible across repeated runs", {
 })
 
 test_that("true values are NA when nothing was observed to compare against", {
-    # tti_run() imputes data that was never observed, so there is no ground
-    # truth and tti_metrics() does not give a meaningful score.
+    # mc_run() imputes data that was never observed, so there is no ground
+    # truth and mc_metrics() does not give a meaningful score.
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
 
     expect_true(all(is.na(run$imputed$true_value)))

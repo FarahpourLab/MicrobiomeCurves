@@ -27,14 +27,14 @@
 #' @keywords internal
 #'
 #' @noRd
-tti_safe_fpca <- function(Ly, Lt) {
+mc_safe_fpca <- function(Ly, Lt) {
     obs_count <- vapply(Ly, function(x) sum(!is.na(x)), numeric(1))
     keep <- which(obs_count >= 2)
 
-    tti_diag_bump("calls")
+    mc_diag_bump("calls")
 
     if (length(keep) < 2) {
-        tti_diag_bump("too_few")
+        mc_diag_bump("too_few")
         return(NULL)
     }
 
@@ -42,11 +42,11 @@ tti_safe_fpca <- function(Ly, Lt) {
     Lt_sub <- Lt[keep]
 
     if (length(keep) <= 3) {
-        tti_diag_bump("small")
+        mc_diag_bump("small")
     }
 
     # fdapace comments on small samples, reset options and gappy designs on
-    # every call. Those are collected here and reported once by tti_fit(),
+    # every call. Those are collected here and reported once by mc_fit(),
     # rather than repeated for each of the many thousands of fits a real
     # table produces.
     fit <- withCallingHandlers(
@@ -59,13 +59,13 @@ tti_safe_fpca <- function(Ly, Lt) {
             error = function(e) NULL
         )),
         warning = function(w) {
-            tti_diag_note(conditionMessage(w))
+            mc_diag_note(conditionMessage(w))
             invokeRestart("muffleWarning")
         }
     )
 
     if (is.null(fit)) {
-        tti_diag_bump("failed")
+        mc_diag_bump("failed")
     }
     fit
 }

@@ -1,12 +1,12 @@
 # Aggregate reporting for FPCA fits.
 #
-# tti_safe_fpca() is called once per cluster per masked cell, so on a real
+# mc_safe_fpca() is called once per cluster per masked cell, so on a real
 # table it runs tens of thousands of times. Reporting a failure at the call
 # site would bury the console, and fdapace's own per-call notes ("The sample
 # size is less or equal to 3 curves") repeat just as often. Both are counted
-# here instead and reported once, by tti_fit(), when the run finishes.
+# here instead and reported once, by mc_fit(), when the run finishes.
 
-tti_diag <- new.env(parent = emptyenv())
+mc_diag <- new.env(parent = emptyenv())
 
 #' Start a fresh diagnostic tally
 #'
@@ -14,13 +14,13 @@ tti_diag <- new.env(parent = emptyenv())
 #'
 #' @keywords internal
 #' @noRd
-tti_diag_reset <- function() {
-    tti_diag$calls <- 0L
-    tti_diag$failed <- 0L
-    tti_diag$small <- 0L
-    tti_diag$too_few <- 0L
-    tti_diag$kfd_fallback <- 0L
-    tti_diag$notes <- list()
+mc_diag_reset <- function() {
+    mc_diag$calls <- 0L
+    mc_diag$failed <- 0L
+    mc_diag$small <- 0L
+    mc_diag$too_few <- 0L
+    mc_diag$kfd_fallback <- 0L
+    mc_diag$notes <- list()
     invisible(NULL)
 }
 
@@ -28,7 +28,7 @@ tti_diag_reset <- function() {
 #'
 #' @description
 #' fdapace raises the same handful of warnings once per fit. Tallying them by
-#' text lets [tti_diag_report()] say what was raised and how often, in place
+#' text lets [mc_diag_report()] say what was raised and how often, in place
 #' of thousands of identical lines.
 #'
 #' @param text The warning's message.
@@ -37,13 +37,13 @@ tti_diag_reset <- function() {
 #'
 #' @keywords internal
 #' @noRd
-tti_diag_note <- function(text) {
-    if (is.null(tti_diag$calls)) {
+mc_diag_note <- function(text) {
+    if (is.null(mc_diag$calls)) {
         return(invisible(NULL))
     }
     key <- trimws(gsub("[[:space:]]+", " ", text))
-    seen <- tti_diag$notes[[key]]
-    tti_diag$notes[[key]] <- if (is.null(seen)) 1L else seen + 1L
+    seen <- mc_diag$notes[[key]]
+    mc_diag$notes[[key]] <- if (is.null(seen)) 1L else seen + 1L
     invisible(NULL)
 }
 
@@ -55,11 +55,11 @@ tti_diag_note <- function(text) {
 #'
 #' @keywords internal
 #' @noRd
-tti_diag_bump <- function(what) {
-    if (is.null(tti_diag[[what]])) {
+mc_diag_bump <- function(what) {
+    if (is.null(mc_diag[[what]])) {
         return(invisible(NULL))
     }
-    tti_diag[[what]] <- tti_diag[[what]] + 1L
+    mc_diag[[what]] <- mc_diag[[what]] + 1L
     invisible(NULL)
 }
 
@@ -69,17 +69,17 @@ tti_diag_bump <- function(what) {
 #'
 #' @keywords internal
 #' @noRd
-tti_diag_get <- function() {
-    if (is.null(tti_diag$calls)) {
+mc_diag_get <- function() {
+    if (is.null(mc_diag$calls)) {
         return(NULL)
     }
     list(
-        calls = tti_diag$calls,
-        failed = tti_diag$failed,
-        small = tti_diag$small,
-        too_few = tti_diag$too_few,
-        kfd_fallback = tti_diag$kfd_fallback,
-        notes = tti_diag$notes
+        calls = mc_diag$calls,
+        failed = mc_diag$failed,
+        small = mc_diag$small,
+        too_few = mc_diag$too_few,
+        kfd_fallback = mc_diag$kfd_fallback,
+        notes = mc_diag$notes
     )
 }
 
@@ -89,13 +89,13 @@ tti_diag_get <- function() {
 #'
 #' @keywords internal
 #' @noRd
-tti_diag_clear <- function() {
-    tti_diag$calls <- NULL
-    tti_diag$failed <- NULL
-    tti_diag$small <- NULL
-    tti_diag$too_few <- NULL
-    tti_diag$kfd_fallback <- NULL
-    tti_diag$notes <- NULL
+mc_diag_clear <- function() {
+    mc_diag$calls <- NULL
+    mc_diag$failed <- NULL
+    mc_diag$small <- NULL
+    mc_diag$too_few <- NULL
+    mc_diag$kfd_fallback <- NULL
+    mc_diag$notes <- NULL
     invisible(NULL)
 }
 
@@ -114,8 +114,8 @@ tti_diag_clear <- function() {
 #'
 #' @keywords internal
 #' @noRd
-tti_diag_report <- function(n_cells = NA_integer_) {
-    d <- tti_diag_get()
+mc_diag_report <- function(n_cells = NA_integer_) {
+    d <- mc_diag_get()
     if (is.null(d) || d$calls == 0L) {
         return(invisible(NULL))
     }
@@ -146,7 +146,7 @@ tti_diag_report <- function(n_cells = NA_integer_) {
         ))
     }
 
-    parts <- c(parts, tti_diag_note_parts(d$notes))
+    parts <- c(parts, mc_diag_note_parts(d$notes))
 
     if (length(parts) > 0) {
         warning(
@@ -168,7 +168,7 @@ tti_diag_report <- function(n_cells = NA_integer_) {
 #'
 #' @keywords internal
 #' @noRd
-tti_diag_note_parts <- function(notes) {
+mc_diag_note_parts <- function(notes) {
     if (is.null(notes) || length(notes) == 0) {
         return(character(0))
     }
@@ -181,7 +181,7 @@ tti_diag_note_parts <- function(notes) {
         function(i) {
             paste0(
                 counts[[i]], " fit(s) reported \"",
-                tti_truncate(names(counts)[i], 90), "\""
+                mc_truncate(names(counts)[i], 90), "\""
             )
         },
         character(1)
@@ -197,7 +197,7 @@ tti_diag_note_parts <- function(notes) {
 #'
 #' @keywords internal
 #' @noRd
-tti_truncate <- function(x, n) {
+mc_truncate <- function(x, n) {
     if (nchar(x) <= n) {
         return(x)
     }

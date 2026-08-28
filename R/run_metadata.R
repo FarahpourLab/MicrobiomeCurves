@@ -24,32 +24,32 @@
 #'   reported.
 #' @param verbose Logical. Whether to report progress.
 #'
-#' @return An object of class `tti_run`, with `completed` carrying the
+#' @return An object of class `mc_run`, with `completed` carrying the
 #'   caller's sample names.
 #'
 #' @keywords internal
 #' @noRd
-tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
+mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
                                   time_col, abundance_type, pseudocount,
                                   out_dir, plots, dpi, plot_format,
                                   K, cluster_method, use_outliers,
                                   seed, min_observed, verbose) {
-    tti_check_meta_args(sample_col, subject_col, time_col)
-    tti_check_dpi(dpi)
+    mc_check_meta_args(sample_col, subject_col, time_col)
+    mc_check_dpi(dpi)
 
     seen <- new.env(parent = emptyenv())
     seen$warned <- character(0)
 
     run <- withCallingHandlers(
         {
-            design <- tti_from_metadata(
+            design <- mc_from_metadata(
                 abundance = dat, metadata = metadata,
                 sample_col = sample_col, subject_col = subject_col,
                 time_col = time_col, abundance_type = abundance_type,
                 pseudocount = pseudocount, verbose = verbose
             )
 
-            fitted <- tti_run_wide(
+            fitted <- mc_run_wide(
                 design$table,
                 taxon_col = design$taxon_col,
                 K = K, cluster_method = cluster_method,
@@ -57,7 +57,7 @@ tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
                 min_observed = min_observed, verbose = verbose
             )
 
-            tti_restore_names(fitted, design)
+            mc_restore_names(fitted, design)
         },
         warning = function(w) {
             seen$warned <- c(seen$warned, conditionMessage(w))
@@ -67,10 +67,10 @@ tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
 
     warned <- seen$warned
     run$warnings <- warned
-    tti_replay_warnings(warned)
+    mc_replay_warnings(warned)
 
     if (!is.null(out_dir)) {
-        run <- tti_emit_output(run, out_dir, warned, plots, dpi,
+        run <- mc_emit_output(run, out_dir, warned, plots, dpi,
                                plot_format, verbose)
     }
     run
@@ -78,7 +78,7 @@ tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
 
 #' Write everything a finished run has to offer
 #'
-#' @param run The `tti_run` object.
+#' @param run The `mc_run` object.
 #' @param out_dir Directory to write into.
 #' @param warned Character vector of warnings raised during the run.
 #' @param plots Logical. Whether to draw per-taxon uncertainty.
@@ -90,21 +90,21 @@ tti_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
 #'
 #' @keywords internal
 #' @noRd
-tti_emit_output <- function(run, out_dir, warned, plots, dpi, plot_format,
+mc_emit_output <- function(run, out_dir, warned, plots, dpi, plot_format,
                             verbose) {
     say <- function(...) if (isTRUE(verbose)) message(...)
 
-    files <- tti_write_output(run, out_dir, warned)
+    files <- mc_write_output(run, out_dir, warned)
     if (isTRUE(plots)) {
         files <- c(
             files,
-            tti_write_uncertainty(run, out_dir, dpi, plot_format, say)
+            mc_write_uncertainty(run, out_dir, dpi, plot_format, say)
         )
     }
 
     run$files <- files
     say("Wrote ", length(files), " file(s) to ", out_dir, ": ",
-        tti_fmt_some(basename(files), n = 6))
+        mc_fmt_some(basename(files), n = 6))
     run
 }
 
@@ -120,7 +120,7 @@ tti_emit_output <- function(run, out_dir, warned, plots, dpi, plot_format,
 #'
 #' @keywords internal
 #' @noRd
-tti_replay_warnings <- function(warned) {
+mc_replay_warnings <- function(warned) {
     for (w in warned) {
         warning(w, call. = FALSE)
     }
@@ -135,7 +135,7 @@ tti_replay_warnings <- function(warned) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_meta_args <- function(sample_col, subject_col, time_col) {
+mc_check_meta_args <- function(sample_col, subject_col, time_col) {
     given <- c(
         sample_col = !missing(sample_col) && !is.null(sample_col),
         subject_col = !missing(subject_col) && !is.null(subject_col),
@@ -147,37 +147,37 @@ tti_check_meta_args <- function(sample_col, subject_col, time_col) {
     stop(
         "sample_col, subject_col and time_col must all be named, so the ",
         "metadata columns can be identified. Missing: ",
-        tti_fmt_some(names(given)[!given]), ".",
+        mc_fmt_some(names(given)[!given]), ".",
         call. = FALSE
     )
 }
 
 #' Put the caller's sample names back on a completed table
 #'
-#' @param run The `tti_run` object produced on the encoded table.
-#' @param design The `tti_design` used to encode it.
+#' @param run The `mc_run` object produced on the encoded table.
+#' @param design The `mc_design` used to encode it.
 #'
-#' @return The `tti_run` object, renamed, with `design` added.
+#' @return The `mc_run` object, renamed, with `design` added.
 #'
 #' @keywords internal
 #' @noRd
-tti_restore_names <- function(run, design) {
+mc_restore_names <- function(run, design) {
     completed <- run$completed
     cols <- setdiff(names(completed), design$taxon_col)
 
     known <- match(cols, design$map$column)
     labels <- ifelse(
         is.na(known),
-        tti_name_added(cols, design),
+        mc_name_added(cols, design),
         design$map$sample[known]
     )
 
     names(completed) <- c("taxon", labels)
 
-    run$completed <- tti_order_samples(completed, cols, design)
-    run$imputed <- tti_restore_long(run$imputed, design)
+    run$completed <- mc_order_samples(completed, cols, design)
+    run$imputed <- mc_restore_long(run$imputed, design)
     run$design <- design
-    run$metadata <- tti_extend_metadata(design, cols[is.na(known)], labels)
+    run$metadata <- mc_extend_metadata(design, cols[is.na(known)], labels)
     run$missing <- design$missing
     run$observed <- design$observed
     run
@@ -191,20 +191,20 @@ tti_restore_names <- function(run, design) {
 #' metadata, so both are translated and the sample name is added.
 #'
 #' @param pred The long table from the fit.
-#' @param design The `tti_design` the run was built from.
+#' @param design The `mc_design` the run was built from.
 #'
 #' @return `pred`, with `subject`, `time` and `sample` in the caller's terms.
 #'
 #' @keywords internal
 #' @noRd
-tti_restore_long <- function(pred, design) {
+mc_restore_long <- function(pred, design) {
     if (is.null(pred) || nrow(pred) == 0) {
         return(pred)
     }
 
     pred$subject <- design$subjects[as.integer(sub("^s", "", pred$rep))]
     pred$time <- design$times[pred$time + 1L]
-    pred$time_label <- tti_time_label(design$axis, pred$time)
+    pred$time_label <- mc_time_label(design$axis, pred$time)
 
     key <- paste(pred$subject, pred$time, sep = "\r")
     known <- match(key, paste(design$map$subject, design$map$time, sep = "\r"))
@@ -224,14 +224,14 @@ tti_restore_long <- function(pred, design) {
 #'
 #' @param completed The completed table, already renamed.
 #' @param cols Character vector of internal column names, in table order.
-#' @param design The `tti_design` the run was built from.
+#' @param design The `mc_design` the run was built from.
 #'
 #' @return `completed`, with its sample columns reordered.
 #'
 #' @keywords internal
 #' @noRd
-tti_order_samples <- function(completed, cols, design) {
-    parsed <- tti_parse_cols(cols)
+mc_order_samples <- function(completed, cols, design) {
+    parsed <- mc_parse_cols(cols)
     subject <- design$subjects[as.integer(sub("^s", "", parsed$rep))]
     time <- design$times[parsed$time + 1L]
 

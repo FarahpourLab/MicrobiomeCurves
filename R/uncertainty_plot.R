@@ -11,7 +11,7 @@
 #' at any magnification and `dpi` does not apply to it; `dpi` governs the
 #' PNG copies, which are written one per taxon when asked for.
 #'
-#' @param run The `tti_run` object.
+#' @param run The `mc_run` object.
 #' @param out_dir Directory to write into.
 #' @param dpi Resolution for the PNG copies, in dots per inch.
 #' @param format Either `"pdf"`, `"png"`, or `"both"`.
@@ -22,7 +22,7 @@
 #'
 #' @keywords internal
 #' @noRd
-tti_write_uncertainty <- function(run, out_dir, dpi, format, say) {
+mc_write_uncertainty <- function(run, out_dir, dpi, format, say) {
     taxa <- unique(run$fit$pred_long$species)
     if (length(taxa) == 0) {
         return(NULL)
@@ -30,7 +30,7 @@ tti_write_uncertainty <- function(run, out_dir, dpi, format, say) {
     use_outliers <- isTRUE(run$fit$use_outliers)
 
     n_cells <- sum(run$fit$pred_long$species == taxa[1])
-    tti_warn_page_count(length(taxa), n_cells)
+    mc_warn_page_count(length(taxa), n_cells)
     say("Drawing uncertainty for ", length(taxa), " taxa ...")
 
     # Working out a band refits the same FPCA models the run already fitted,
@@ -40,24 +40,24 @@ tti_write_uncertainty <- function(run, out_dir, dpi, format, say) {
     named <- withCallingHandlers(
         {
             pages <- lapply(taxa, function(sp) {
-                tti_taxon_pages(run$fit, sp, run$design, use_outliers)
+                mc_taxon_pages(run$fit, sp, run$design, use_outliers)
             })
             stats::setNames(pages, taxa)
         },
         warning = function(w) invokeRestart("muffleWarning")
     )
 
-    named <- tti_flatten_pages(named)
+    named <- mc_flatten_pages(named)
     if (length(named) == 0) {
         return(NULL)
     }
 
     out <- character(0)
     if (format %in% c("pdf", "both")) {
-        out <- c(out, tti_uncertainty_pdf(named, out_dir))
+        out <- c(out, mc_uncertainty_pdf(named, out_dir))
     }
     if (format %in% c("png", "both")) {
-        out <- c(out, tti_uncertainty_png(named, out_dir, dpi))
+        out <- c(out, mc_uncertainty_png(named, out_dir, dpi))
     }
     out
 }
@@ -71,7 +71,7 @@ tti_write_uncertainty <- function(run, out_dir, dpi, format, say) {
 #'
 #' @keywords internal
 #' @noRd
-tti_flatten_pages <- function(pages) {
+mc_flatten_pages <- function(pages) {
     out <- list()
     for (sp in names(pages)) {
         ps <- pages[[sp]]
@@ -95,7 +95,7 @@ tti_flatten_pages <- function(pages) {
 #'
 #' @keywords internal
 #' @noRd
-tti_uncertainty_pdf <- function(named, out_dir) {
+mc_uncertainty_pdf <- function(named, out_dir) {
     path <- file.path(out_dir, "uncertainty_by_taxon.pdf")
 
     grDevices::pdf(path, width = 8, height = 5, onefile = TRUE)
@@ -121,11 +121,11 @@ tti_uncertainty_pdf <- function(named, out_dir) {
 #'
 #' @keywords internal
 #' @noRd
-tti_uncertainty_png <- function(named, out_dir, dpi) {
+mc_uncertainty_png <- function(named, out_dir, dpi) {
     dir <- file.path(out_dir, "uncertainty_png")
     dir.create(dir, recursive = TRUE, showWarnings = FALSE)
 
-    files <- file.path(dir, paste0(tti_safe_name(names(named)), ".png"))
+    files <- file.path(dir, paste0(mc_safe_name(names(named)), ".png"))
     for (i in seq_along(named)) {
         ggplot2::ggsave(
             files[i], named[[i]],
@@ -143,7 +143,7 @@ tti_uncertainty_png <- function(named, out_dir, dpi) {
 #'
 #' @keywords internal
 #' @noRd
-tti_safe_name <- function(x) {
+mc_safe_name <- function(x) {
     out <- gsub("[^A-Za-z0-9._-]+", "_", x)
     out <- gsub("^_+|_+$", "", out)
     out[!nzchar(out)] <- "taxon"
@@ -158,7 +158,7 @@ tti_safe_name <- function(x) {
 #'
 #' @keywords internal
 #' @noRd
-tti_check_dpi <- function(dpi) {
+mc_check_dpi <- function(dpi) {
     ok <- is.numeric(dpi) && length(dpi) == 1 && !is.na(dpi) && dpi > 0
     if (!ok) {
         stop("dpi must be a single positive number.", call. = FALSE)

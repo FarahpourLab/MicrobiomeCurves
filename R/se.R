@@ -26,7 +26,7 @@ NULL
 #'
 #' @keywords internal
 #' @noRd
-tti_encode_samples <- function(subject, time) {
+mc_encode_samples <- function(subject, time) {
     subjects <- unique(as.character(subject))
     times <- sort(unique(time))
 
@@ -43,7 +43,7 @@ tti_encode_samples <- function(subject, time) {
 #' Impute missing timepoints in a SummarizedExperiment
 #'
 #' @description
-#' Method of [tti_run()] for `SummarizedExperiment` and
+#' Method of [mc_run()] for `SummarizedExperiment` and
 #' `TreeSummarizedExperiment` objects, the containers used across the
 #' Bioconductor microbiome ecosystem.
 #'
@@ -59,7 +59,7 @@ tti_encode_samples <- function(subject, time) {
 #' represented in the returned object without a column to hold it, such samples
 #' are appended, with `colData` filled in for `subject_col` and `time_col` and
 #' `NA` elsewhere. **The returned object can therefore have more columns than
-#' the input.** `metadata(x)$tti_run$added_samples` names them, and is
+#' the input.** `metadata(x)$mc_run$added_samples` names them, and is
 #' `character(0)` when none were added.
 #'
 #' The input assay is never modified. Imputed values are placed in a new assay,
@@ -76,10 +76,10 @@ tti_encode_samples <- function(subject, time) {
 #' @param name Character. Name of the assay to write the completed matrix into.
 #'   Defaults to `"imputed"`.
 #' @param ... Further arguments passed to the `data.frame` method of
-#'   [tti_run()], such as `K`, `use_outliers`, `seed` and `verbose`.
+#'   [mc_run()], such as `K`, `use_outliers`, `seed` and `verbose`.
 #'
 #' @return The input object with an additional assay named by `name`, holding
-#'   the completed matrix, and with `metadata(x)$tti_run` set to a list
+#'   the completed matrix, and with `metadata(x)$mc_run` set to a list
 #'   carrying `missing`, `observed`, `n_failed` and `added_samples`. Columns
 #'   are added if any subject-timepoint had no sample at all.
 #'
@@ -88,22 +88,22 @@ tti_encode_samples <- function(subject, time) {
 #' library(SummarizedExperiment)
 #' library(TreeSummarizedExperiment)
 #'
-#' se <- tti_as_demo_se()
+#' se <- mc_as_demo_se()
 #' se
 #'
 #' out <- suppressWarnings(
-#'     tti_run(se, subject_col = "subject", time_col = "timepoint",
+#'     mc_run(se, subject_col = "subject", time_col = "timepoint",
 #'         K = 1, verbose = FALSE)
 #' )
 #'
 #' assayNames(out)
-#' metadata(out)$tti_run$missing
+#' metadata(out)$mc_run$missing
 #'
-#' @seealso [tti_run()], [tti_as_demo_se()]
+#' @seealso [mc_run()], [mc_as_demo_se()]
 #'
-#' @rdname tti_run
+#' @rdname mc_run
 #' @export
-setMethod("tti_run", "SummarizedExperiment", function(
+setMethod("mc_run", "SummarizedExperiment", function(
     dat,
     subject_col = "subject",
     time_col = "timepoint",
@@ -112,7 +112,7 @@ setMethod("tti_run", "SummarizedExperiment", function(
     ...
 ) {
     cd <- SummarizedExperiment::colData(dat)
-    spec <- tti_se_inputs(dat, cd, subject_col, time_col, assay_name)
+    spec <- mc_se_inputs(dat, cd, subject_col, time_col, assay_name)
 
     mat <- spec$mat
     enc <- spec$enc
@@ -123,16 +123,16 @@ setMethod("tti_run", "SummarizedExperiment", function(
 
     # Subject and time come from colData, so the encoded layout is built
     # here and goes straight to the fitting entry point.
-    run <- tti_run_wide(tab, taxon_col = "OTU_ID", ...)
+    run <- mc_run_wide(tab, taxon_col = "OTU_ID", ...)
 
     added <- setdiff(
         setdiff(colnames(run$completed), "OTU_ID"), enc$label
     )
-    obj <- tti_se_write_back(
+    obj <- mc_se_write_back(
         dat, cd, run, enc, spec, subject_col, time_col, name
     )
 
-    S4Vectors::metadata(obj)$tti_run <- list(
+    S4Vectors::metadata(obj)$mc_run <- list(
         missing = run$missing,
         observed = run$observed,
         n_failed = run$n_failed,
@@ -159,15 +159,15 @@ setMethod("tti_run", "SummarizedExperiment", function(
 #' @return A `TreeSummarizedExperiment` with one assay, `"clr"`.
 #'
 #' @examples
-#' se <- tti_as_demo_se()
+#' se <- mc_as_demo_se()
 #' dim(se)
 #' head(SummarizedExperiment::colData(se))
 #'
-#' @seealso [taxa_demo], [tti_run()]
+#' @seealso [taxa_demo], [mc_run()]
 #'
 #' @export
-tti_as_demo_se <- function() {
-    tab <- tti_demo_table()
+mc_as_demo_se <- function() {
+    tab <- mc_demo_table()
     labels <- setdiff(colnames(tab), "OTU_ID")
 
     parts <- strsplit(labels, ".", fixed = TRUE)
@@ -208,9 +208,9 @@ tti_as_demo_se <- function() {
 #'
 #' @param dat The object as supplied.
 #' @param cd Its `colData`.
-#' @param run The `tti_run` produced on the encoded table.
-#' @param enc List from [tti_encode_samples()].
-#' @param spec List from [tti_se_inputs()].
+#' @param run The `mc_run` produced on the encoded table.
+#' @param enc List from [mc_encode_samples()].
+#' @param spec List from [mc_se_inputs()].
 #' @param subject_col,time_col Column names within `cd`.
 #' @param name Name for the new assay.
 #'
@@ -219,7 +219,7 @@ tti_as_demo_se <- function() {
 #'
 #' @keywords internal
 #' @noRd
-tti_se_write_back <- function(dat, cd, run, enc, spec, subject_col, time_col,
+mc_se_write_back <- function(dat, cd, run, enc, spec, subject_col, time_col,
                               name) {
     completed <- run$completed
     out_labels <- setdiff(colnames(completed), "OTU_ID")
@@ -232,7 +232,7 @@ tti_se_write_back <- function(dat, cd, run, enc, spec, subject_col, time_col,
     rownames(filled) <- rownames(dat)
 
     obj <- if (length(added) > 0) {
-        tti_se_append_samples(
+        mc_se_append_samples(
             dat, cd, enc, added, subject_col, time_col, spec$taxa
         )
     } else {
@@ -258,7 +258,7 @@ tti_se_write_back <- function(dat, cd, run, enc, spec, subject_col, time_col,
 #'
 #' @keywords internal
 #' @noRd
-tti_se_inputs <- function(dat, cd, subject_col, time_col, assay_name) {
+mc_se_inputs <- function(dat, cd, subject_col, time_col, assay_name) {
     for (nm in c(subject_col, time_col)) {
         if (!(nm %in% colnames(cd))) {
             stop("colData has no column '", nm, "'")
@@ -281,9 +281,9 @@ tti_se_inputs <- function(dat, cd, subject_col, time_col, assay_name) {
     }
 
     subject <- as.character(cd[[subject_col]])
-    time <- tti_se_times(cd[[time_col]], time_col)
+    time <- mc_se_times(cd[[time_col]], time_col)
 
-    enc <- tti_encode_samples(subject, time)
+    enc <- mc_encode_samples(subject, time)
     if (anyDuplicated(enc$label) > 0) {
         stop(
             "Each subject may appear at most once per time point. ",
@@ -308,7 +308,7 @@ tti_se_inputs <- function(dat, cd, subject_col, time_col, assay_name) {
 #'
 #' @keywords internal
 #' @noRd
-tti_se_times <- function(time_raw, time_col) {
+mc_se_times <- function(time_raw, time_col) {
     if (is.numeric(time_raw)) {
         time <- as.numeric(time_raw)
     } else {
@@ -335,7 +335,7 @@ tti_se_times <- function(time_raw, time_col) {
 #'
 #' @param dat The input `SummarizedExperiment`.
 #' @param cd Its `colData`.
-#' @param enc Sample encoding from [tti_encode_samples()].
+#' @param enc Sample encoding from [mc_encode_samples()].
 #' @param added Character vector of labels to append.
 #' @param subject_col,time_col Column names in `colData`.
 #' @param taxa Character vector of taxon names.
@@ -344,7 +344,7 @@ tti_se_times <- function(time_raw, time_col) {
 #'
 #' @keywords internal
 #' @noRd
-tti_se_append_samples <- function(dat, cd, enc, added, subject_col,
+mc_se_append_samples <- function(dat, cd, enc, added, subject_col,
                                   time_col, taxa) {
     parts <- strsplit(added, ".", fixed = TRUE)
     add_subject <- enc$subjects[

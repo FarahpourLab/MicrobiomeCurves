@@ -21,7 +21,7 @@ detect_outliers_depth <- function(Ly, Lt, alpha = 0.05) {
         stop("Package 'fda.usc' required for depth-based outliers")
     }
 
-    fp <- tti_safe_fpca(Ly, Lt)
+    fp <- mc_safe_fpca(Ly, Lt)
     if (is.null(fp)) return(rep(FALSE, length(Ly)))
 
     curves <- fitted(fp)
@@ -36,7 +36,7 @@ detect_outliers_depth <- function(Ly, Lt, alpha = 0.05) {
 
     outliers <- depth_vals < cutoff
 
-    # tti_safe_fpca() fits only the subjects with at least two observations, so
+    # mc_safe_fpca() fits only the subjects with at least two observations, so
     # `outliers` is indexed against those, not against every subject in Ly. Map
     # it back to full length; a subject FPCA could not use is not an outlier.
     #
@@ -89,7 +89,7 @@ select_K_silhouette_plot <- function(
     dmat <- stats::dist(scores)
 
     for (k in seq(2, max_K)) {
-        tti_reset_rng(seed)
+        mc_reset_rng(seed)
         km <- stats::kmeans(scores, centers = k, nstart = 10)
         sil <- cluster::silhouette(km$cluster, dmat)
         sil_scores[k] <- mean(sil[, 3])
@@ -132,7 +132,7 @@ NULL
 #' missing at a given subject-timepoint).
 #'
 #' @details
-#' This function is the core modeling step of the TaxaTimeImpute workflow.
+#' This function is the core modeling step of the MicrobiomeCurves workflow.
 #'
 #' For each taxon (feature), the function:
 #' \enumerate{
@@ -147,7 +147,7 @@ NULL
 #'  taxa
 #' for a subject at a given time point are missing).
 #'
-#' @param prep A list returned by \code{\link{tti_prepare}} containing
+#' @param prep A list returned by \code{\link{mc_prepare}} containing
 #'   parsed data, replicate-time mapping, and masking information.
 #' @param K Integer. Number of clusters for grouping subject trajectories.
 #'   If \code{K = 1}, no clustering is performed and a single FPCA model is
@@ -174,7 +174,7 @@ NULL
 #' @param seed Integer. Random seed for reproducibility of clustering.
 #'
 #' @return
-#' An object of class \code{"tti_fit"} containing:
+#' An object of class \code{"mc_fit"} containing:
 #' \itemize{
 #'   \item \code{dat}: Data with masked values applied
 #'   \item \code{dat_orig}: Original unmodified data
@@ -191,7 +191,7 @@ NULL
 #' @examples
 #' data(taxa_demo)
 #'
-#' prep <- tti_prepare(
+#' prep <- mc_prepare(
 #'     dat = taxa_demo,
 #'     taxon_col = "OTU_ID",
 #'     mask_list = data.frame(rep = "S01", time = 3)
@@ -199,26 +199,26 @@ NULL
 #'
 #' # K = 1 pools all subjects. K = NULL picks K per taxon by silhouette
 #' # width, which is slower.
-#' fit <- suppressWarnings(tti_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, K = 1))
 #'
 #' class(fit)
 #' head(fit$pred_long[, c("species", "rep", "time", "imputed_value")])
 #'
 #' @seealso
-#' \code{\link{tti_prepare}},
-#' \code{\link{tti_impute}},
-#' \code{\link{tti_run}}
+#' \code{\link{mc_prepare}},
+#' \code{\link{mc_impute}},
+#' \code{\link{mc_run}}
 #'
 #' @export
-tti_fit <- function(prep, K = NULL,
+mc_fit <- function(prep, K = NULL,
                     cluster_method = c("fpca", "kmeans_fd"),
                     use_outliers = TRUE, seed = 123) {
     # Reproducible for a given seed, but the caller's own random stream is
     # restored when this function returns. See R/rng.R.
-    tti_preserve_rng()
-    tti_reset_rng(seed)
+    mc_preserve_rng()
+    mc_reset_rng(seed)
 
-    tti_check_prep(prep)
+    mc_check_prep(prep)
 
     dat_orig <- prep$dat
     taxon_col <- prep$taxon_col
@@ -226,20 +226,20 @@ tti_fit <- function(prep, K = NULL,
     cluster_method <- match.arg(cluster_method)
     species_vec <- dat_orig[[taxon_col]]
 
-    pred_long <- tti_build_targets(
+    pred_long <- mc_build_targets(
         dat_orig, taxon_col, prep$mask_pairs, nrow(dat_orig)
     )
 
-    reshaped <- tti_mask_and_reshape(dat_orig, prep$col_map, prep$mask_pairs)
+    reshaped <- mc_mask_and_reshape(dat_orig, prep$col_map, prep$mask_pairs)
     dat <- reshaped$dat
     long <- reshaped$long
 
     # Count FPCA outcomes across the whole run so they can be reported once
     # rather than at each of the many thousands of individual fits.
-    tti_diag_reset()
-    on.exit(tti_diag_clear(), add = TRUE)
+    mc_diag_reset()
+    on.exit(mc_diag_clear(), add = TRUE)
 
-    ft <- tti_fit_all_taxa(
+    ft <- mc_fit_all_taxa(
         long, taxon_col, species_vec, reps, pred_long,
         use_outliers, K, seed, cluster_method
     )
@@ -247,32 +247,32 @@ tti_fit <- function(prep, K = NULL,
         ft$pred_long, se = (true_value - imputed_value)^2
     )
 
-    tti_diag_report(nrow(pred_long))
-    tti_warn_unimputed(pred_long)
+    mc_diag_report(nrow(pred_long))
+    mc_warn_unimputed(pred_long)
 
-    tti_fit_result(
+    mc_fit_result(
         dat, dat_orig, prep, ft, pred_long, K, cluster_method,
         use_outliers, seed
     )
 }
 
-#' Assemble the object returned by tti_fit()
+#' Assemble the object returned by mc_fit()
 #'
 #' @param dat The table with masked cells set to `NA`.
 #' @param dat_orig The table as supplied.
-#' @param prep The object from [tti_prepare()].
-#' @param ft List returned by `tti_fit_all_taxa()`.
+#' @param prep The object from [mc_prepare()].
+#' @param ft List returned by `mc_fit_all_taxa()`.
 #' @param pred_long Prediction table carrying the squared errors.
 #' @param K Integer or `NULL`, the requested number of clusters.
 #' @param cluster_method Character, the clustering route that was used.
 #' @param use_outliers Logical, whether trajectories were screened.
 #' @param seed Integer random seed.
 #'
-#' @return An object of class `tti_fit`.
+#' @return An object of class `mc_fit`.
 #'
 #' @keywords internal
 #' @noRd
-tti_fit_result <- function(dat, dat_orig, prep, ft, pred_long, K,
+mc_fit_result <- function(dat, dat_orig, prep, ft, pred_long, K,
                            cluster_method, use_outliers, seed) {
     structure(
         c(
@@ -285,6 +285,6 @@ tti_fit_result <- function(dat, dat_orig, prep, ft, pred_long, K,
                 seed = seed
             )
         ),
-        class = "tti_fit"
+        class = "mc_fit"
     )
 }

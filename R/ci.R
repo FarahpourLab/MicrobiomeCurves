@@ -46,15 +46,15 @@
 #' }
 #'
 #' @seealso
-#' \code{\link{tti_ci}}
+#' \code{\link{mc_ci}}
 #'
 #' @keywords internal
 #' @noRd
-tti_analytic_ci <- function(fp, obs_times, obs_values, pred_time,
+mc_analytic_ci <- function(fp, obs_times, obs_values, pred_time,
                             include_noise = TRUE) {
     if (is.null(fp)) return(NULL)
 
-    parts <- tti_fpca_parts(fp)
+    parts <- mc_fpca_parts(fp)
     if (is.null(parts)) return(NULL)
 
     grid <- parts$grid
@@ -76,7 +76,7 @@ tti_analytic_ci <- function(fp, obs_times, obs_values, pred_time,
     )
     pred_idx <- which.min(abs(grid - pred_time))
 
-    blup <- tti_score_blup(
+    blup <- mc_score_blup(
         Phi_i = phi[obs_idx, , drop = FALSE],
         y_center = obs_values - mu[obs_idx],
         lambda = lambda,
@@ -113,7 +113,7 @@ tti_analytic_ci <- function(fp, obs_times, obs_values, pred_time,
 #'
 #' @keywords internal
 #' @noRd
-tti_score_blup <- function(Phi_i, y_center, lambda, sigma2) {
+mc_score_blup <- function(Phi_i, y_center, lambda, sigma2) {
     Lambda_inv <- diag(1 / lambda, nrow = length(lambda))
 
     V_xi <- tryCatch(
@@ -178,11 +178,11 @@ tti_score_blup <- function(Phi_i, y_center, lambda, sigma2) {
 #' }
 #'
 #' @seealso
-#' \code{\link{tti_ci}}
+#' \code{\link{mc_ci}}
 #'
 #' @keywords internal
 #' @noRd
-tti_bootstrap_ci <- function(Ly, Lt, target_rep, B = 500) {
+mc_bootstrap_ci <- function(Ly, Lt, target_rep, B = 500) {
     fp0 <- tryCatch(
         fdapace::FPCA(Ly = Ly, Lt = Lt, optns = list(dataType = "Sparse")),
         error = function(e) NULL
@@ -256,8 +256,8 @@ tti_bootstrap_ci <- function(Ly, Lt, target_rep, B = 500) {
 #' The FPCA model is fitted using only subjects within the same cluster as the
 #' target subject, allowing borrowing of information from similar trajectories.
 #'
-#' @param fit An object of class \code{"tti_fit"} returned by
-#'   \code{\link{tti_fit}}.
+#' @param fit An object of class \code{"mc_fit"} returned by
+#'   \code{\link{mc_fit}}.
 #'
 #' @param species_name Character. Name of the taxon (feature) to analyze.
 #'
@@ -285,16 +285,16 @@ tti_bootstrap_ci <- function(Ly, Lt, target_rep, B = 500) {
 #' @examples
 #' data(taxa_demo)
 #'
-#' prep <- tti_prepare(
+#' prep <- mc_prepare(
 #'     dat = taxa_demo,
 #'     taxon_col = "OTU_ID",
 #'     mask_list = data.frame(rep = "S01", time = 3)
 #' )
-#' fit <- suppressWarnings(tti_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, K = 1))
 #'
 #' # analytic intervals are cheap
 #' ci <- suppressWarnings(
-#'     tti_ci(
+#'     mc_ci(
 #'         fit = fit,
 #'         species_name = fit$pred_long$species[1],
 #'         rep_id = "S01",
@@ -308,7 +308,7 @@ tti_bootstrap_ci <- function(Ly, Lt, target_rep, B = 500) {
 #' # Bootstrap intervals refit the model B times. B is small here to keep the
 #' # example quick; use a few hundred for real work.
 #' ci_both <- suppressWarnings(
-#'     tti_ci(
+#'     mc_ci(
 #'         fit = fit,
 #'         species_name = fit$pred_long$species[1],
 #'         rep_id = "S01",
@@ -321,11 +321,11 @@ tti_bootstrap_ci <- function(Ly, Lt, target_rep, B = 500) {
 #' head(ci_both$bootstrap)
 #'
 #' @seealso
-#' \code{\link{tti_fit}},
-#' \code{\link{tti_plot}}
+#' \code{\link{mc_fit}},
+#' \code{\link{mc_plot}}
 #'
 #' @export
-tti_ci <- function(
+mc_ci <- function(
     fit,
     species_name,
     rep_id,
@@ -343,14 +343,14 @@ tti_ci <- function(
     cl_id <- clusters[rep_id]
     members <- names(clusters)[clusters == cl_id]
 
-    W_sp <- tti_subject_time_matrix(fit, species_name)
-    fpca <- tti_cluster_fpca(W_sp, members, rep_id, time_id, fit$times)
+    W_sp <- mc_subject_time_matrix(fit, species_name)
+    fpca <- mc_cluster_fpca(W_sp, members, rep_id, time_id, fit$times)
     fp <- fpca$fp
 
     out <- list(fp = fp, analytic = NULL, bootstrap = NULL)
 
     if (method %in% c("analytic", "both")) {
-        out$analytic <- tti_analytic_band(
+        out$analytic <- mc_analytic_band(
             fp,
             obs_times = fpca$Lt[[rep_id]],
             obs_values = fpca$Ly[[rep_id]]
@@ -358,7 +358,7 @@ tti_ci <- function(
     }
 
     if (method %in% c("bootstrap", "both")) {
-        band <- tti_bootstrap_ci(
+        band <- mc_bootstrap_ci(
             fpca$Ly, fpca$Lt,
             target_rep = rep_id, B = B
         )

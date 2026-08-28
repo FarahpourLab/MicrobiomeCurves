@@ -5,7 +5,7 @@ test_that("a complete table reports nothing missing", {
         for (tt in 0:3) dat[[paste0(s, ".", tt)]] <- c(1, 2)
     }
 
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
     expect_equal(nrow(info$missing), 0)
     expect_equal(info$reps, c("S1", "S2"))
@@ -19,7 +19,7 @@ test_that("a column absent from the table is detected", {
     }
     dat[["S1.2"]] <- NULL
 
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
     expect_equal(nrow(info$missing), 1)
     expect_equal(info$missing$rep, "S1")
@@ -35,7 +35,7 @@ test_that("a column present but entirely NA is detected", {
     }
     dat[["S2.1"]] <- NA_real_
 
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
     expect_equal(nrow(info$missing), 1)
     expect_equal(info$missing$reason, "all_na")
@@ -53,7 +53,7 @@ test_that("a partly-NA column is rejected, not silently ignored", {
     dat[["S1.1"]][2] <- NA
 
     expect_error(
-        tti_detect_missing(dat, taxon_col = "OTU_ID"),
+        mc_detect_missing(dat, taxon_col = "OTU_ID"),
         "only partly measured"
     )
 })
@@ -67,7 +67,7 @@ test_that("an empty taxon does not make every column look partly measured", {
     }
     dat[2, grep("\\.", names(dat))] <- NA
 
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
     expect_equal(nrow(info$partial_na), 0)
     expect_equal(nrow(info$missing), 0)
 })
@@ -82,18 +82,18 @@ test_that("an all-NA column of logical type is accepted", {
     dat[["S2.1"]] <- NA # logical, not NA_real_
     expect_type(dat[["S2.1"]], "logical")
 
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
     expect_equal(nrow(info$missing), 1)
     expect_equal(info$missing$reason, "all_na")
 })
 
 test_that("the bundled CSV round-trips through read.csv", {
-    path <- system.file("extdata", "taxa_demo.csv", package = "TaxaTimeImpute")
+    path <- system.file("extdata", "taxa_demo.csv", package = "MicrobiomeCurves")
     skip_if(path == "", "extdata not installed")
 
     dat <- read.csv(path, check.names = FALSE)
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
     expect_equal(nrow(info$missing), 3)
     expect_setequal(info$missing$col, c("S02.1", "S04.2", "S07.4"))
@@ -107,7 +107,7 @@ test_that("a non-numeric column is rejected", {
     dat[["S1.1"]] <- c("a", "b")
 
     expect_error(
-        tti_detect_missing(dat, taxon_col = "OTU_ID"),
+        mc_detect_missing(dat, taxon_col = "OTU_ID"),
         "not numeric"
     )
 })
@@ -120,7 +120,7 @@ test_that("columns that do not parse are reported, not silently used", {
     }
     dat[["cluster"]] <- c(1, 2)
 
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
     expect_equal(info$unparsed, "cluster")
     expect_false("cluster" %in% info$col_map$col)
@@ -134,20 +134,20 @@ test_that("observed counts per subject are correct", {
     dat[["S1.2"]] <- NULL # absent
     dat[["S1.3"]] <- NA_real_ # all NA
 
-    info <- tti_detect_missing(dat, taxon_col = "OTU_ID")
+    info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
     expect_equal(info$observed$n_observed[info$observed$rep == "S1"], 2)
     expect_equal(info$observed$n_observed[info$observed$rep == "S2"], 4)
 })
 
 test_that("taxon_col and layout are validated", {
-    expect_error(tti_detect_missing(list(a = 1)), "data.frame")
+    expect_error(mc_detect_missing(list(a = 1)), "data.frame")
     expect_error(
-        tti_detect_missing(data.frame(x = 1), taxon_col = "nope"),
+        mc_detect_missing(data.frame(x = 1), taxon_col = "nope"),
         "not found"
     )
     expect_error(
-        tti_detect_missing(data.frame(OTU_ID = "T1", junk = 1)),
+        mc_detect_missing(data.frame(OTU_ID = "T1", junk = 1)),
         "No '<subject>[.]<time>' columns detected"
     )
 })
