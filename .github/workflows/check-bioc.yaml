@@ -42,6 +42,11 @@ jobs:
           key: ${{ runner.os }}-bioc-devel-${{ hashFiles('DESCRIPTION') }}
           restore-keys: ${{ runner.os }}-bioc-devel-
 
+      # The PDF vignette needs a LaTeX engine. The Bioconductor devel image
+      # does not ship one -- it reports "pdflatex not found! Not building
+      # PDF manual" -- so install TinyTeX here too.
+      - uses: r-lib/actions/setup-tinytex@v2
+
       - name: Install dependencies
         run: |
           # The devel image does not ship remotes, and the next lines need it.
@@ -108,8 +113,7 @@ jobs:
 
       - uses: r-lib/actions/setup-pandoc@v2
 
-      # The PDF vignette needs a LaTeX engine. The Bioconductor devel
-      # container has one; these runners do not.
+      # The PDF vignette needs a LaTeX engine; no runner here ships one.
       - uses: r-lib/actions/setup-tinytex@v2
 
       - name: Point at Bioconductor devel
