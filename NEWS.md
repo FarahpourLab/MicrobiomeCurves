@@ -46,9 +46,12 @@ First submission to Bioconductor.
   subject and time and flagged in the returned metadata, so imputed samples
   stay distinguishable from measured ones.
 * `mc_demo_data()` returns the bundled example in that form.
-* The workflow vignette is provided as both HTML and PDF, generated from one
-  shared source so the two cannot drift apart. Note that vignettes are only
-  present if the package was installed with `build_vignettes = TRUE`.
+* The workflow vignette ships as HTML. `tools/render-docs.R` writes the same
+  document to the package root as both HTML and PDF for reading outside R;
+  the PDF is produced that way rather than shipped as a second vignette,
+  which would make every build machine need a LaTeX engine. Note that
+  vignettes are only present if the package was installed with
+  `build_vignettes = TRUE`.
 * `mc_prepare()`, `mc_fit()` and `mc_impute()` continue to take the wide
   `"<subject>.<time>"` layout, which is the benchmarking route.
 * `mc_run()` imputes missing whole samples in a longitudinal microbiome

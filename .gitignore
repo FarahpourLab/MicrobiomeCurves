@@ -6,3 +6,7 @@
 *.Rcheck/
 *.BiocCheck/
 *.BiocCheck
+vignettes/*.log
+vignettes/*.tex
+MicrobiomeCurves-workflow.html
+MicrobiomeCurves-workflow.pdf

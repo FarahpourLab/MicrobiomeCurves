@@ -252,21 +252,22 @@ mc_plot(fit, species_name = "Taxon01", rep_id = "S01",
 
 ## Documentation
 
-The workflow vignette is available in both formats:
-
 ```r
-vignette("MicrobiomeCurves-workflow", package = "MicrobiomeCurves")      # HTML
-vignette("MicrobiomeCurves-workflow-pdf", package = "MicrobiomeCurves")  # PDF
+vignette("MicrobiomeCurves-workflow", package = "MicrobiomeCurves")
 ```
-
-Both are generated from the same source, so they cannot drift apart.
 
 If `vignette()` reports that it is not found, the package was installed
 without them. Vignettes are not built by default:
 
 ```r
-remotes::install_github("FarahpourLab/MicrobiomeCurves", build_vignettes = TRUE)
+remotes::install_github("FarahpourLab/MicrobiomeCurves",
+                        build_vignettes = TRUE)
 ```
+
+For a reading copy outside R, `Rscript tools/render-docs.R` writes the same
+document to the package root as both HTML and PDF. The PDF is produced this
+way rather than shipped as a second vignette, because that would make every
+build machine need a LaTeX engine.
 
 ## Citation
 
