@@ -36,10 +36,13 @@
 #' @param subject_col Character name of the metadata column identifying the
 #'   subject each sample was taken from.
 #' @param time_col Character name of the metadata column holding the time
-#'   point. Numbers are used as they stand. Labels such as `"baseline"` and
-#'   `"week1"` are placed in order at equal spacing, taking the order from
-#'   the factor's levels if it is a factor and from the order the rows appear
-#'   otherwise; this is reported, because the spacing changes the fit.
+#'   point. Either numbers or labels such as `"baseline"` and `"week1"`;
+#'   labels take their order from the factor's levels if the column is a
+#'   factor and from the row order otherwise, which is reported so it can be
+#'   checked. **The model uses the order of the time points, not their
+#'   values**, so uneven intervals are not represented in the curve; the
+#'   values are kept for reporting and for the axis of the uncertainty
+#'   pages.
 #' @param abundance_type Either `"clr"`, meaning the values are already
 #'   centred log-ratios, or `"raw"`, meaning counts or relative abundances to
 #'   be CLR-transformed here.

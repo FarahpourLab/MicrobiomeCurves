@@ -12,12 +12,13 @@ First submission to Bioconductor.
   column name. *Subject* means whatever the repeated measurements were taken
   on, with no assumption of species. `tti_from_metadata()` performs the
   conversion and reports the design on its own.
-* Time points may be numbers, whose spacing is used as given, or labels such
-  as `"baseline"` and `"week1"`. Labels are placed in order at equal
-  spacing, taken from the factor's levels if the column is a factor and from
-  the row order otherwise, and a warning says so, because the spacing changes
-  every fitted curve. Labels are carried through to the reports, the log and
-  the names of created columns.
+* Time points may be numbers or labels such as `"baseline"` and `"week1"`.
+  Labels take their order from the factor's levels if the column is a factor
+  and from the row order otherwise, and a warning states the order so it can
+  be checked. The model uses the order of the time points rather than their
+  values, so uneven intervals are not represented in the fitted curve; the
+  values are carried through to the reports, the log, the axis of the
+  uncertainty pages and the names of created columns.
 * Abundances may be raw counts or relative abundances
   (`abundance_type = "raw"`), which are CLR-transformed on the way in with
   zeros replaced, or values already transformed (`abundance_type = "clr"`).

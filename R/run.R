@@ -180,12 +180,16 @@ tti_detect_missing <- function(
 #'   mouse, a participant, a plot, a bioreactor. Nothing here assumes a
 #'   species.
 #' @param time_col Character. Name of the \code{metadata} column holding the
-#'   time point. Numbers are used as they stand, so real spacing is
-#'   respected. Labels such as \code{"baseline"} and \code{"week1"} are
-#'   placed in order at equal spacing, taking the order from the factor's
-#'   levels if it is a factor and from the order the rows appear otherwise.
-#'   That assumption is reported, because the spacing changes every fitted
-#'   curve.
+#'   time point. Either numbers or labels such as \code{"baseline"} and
+#'   \code{"week1"}; labels take their order from the factor's levels if the
+#'   column is a factor and from the order the rows appear otherwise, which
+#'   is reported so it can be checked.
+#'
+#'   \strong{The model uses the order of the time points, not their values.}
+#'   Times of 0, 1, 2 and 60 are fitted exactly as 0, 1, 2 and 3 would be, so
+#'   uneven intervals are not represented in the curve. The values are kept
+#'   for reporting, for the axis of the uncertainty pages, and for naming any
+#'   column that has to be created.
 #' @param abundance_type Either \code{"clr"}, meaning \code{dat} already
 #'   holds centred log-ratios, or \code{"raw"}, meaning counts or relative
 #'   abundances that are CLR-transformed here.

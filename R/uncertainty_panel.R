@@ -125,6 +125,9 @@ tti_panel_scales <- function(panel, use_outliers) {
             ),
             guide = "none"
         ),
+        ggplot2::scale_x_continuous(
+            breaks = panel$axis_breaks, labels = panel$axis_labels
+        ),
         ggplot2::labs(
             title = panel$title, subtitle = panel$subtitle,
             x = "Time", y = "CLR abundance"

@@ -132,6 +132,7 @@ tti_merge_panels <- function(panels) {
             numeric(0)
         },
         title = first$title, subtitle = first$subtitle,
+        axis_breaks = first$axis_breaks, axis_labels = first$axis_labels,
         colour_breaks = first$colour_breaks, fill_breaks = first$fill_breaks
     )
 }

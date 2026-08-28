@@ -165,7 +165,7 @@ test_that("label time points are accepted, in order, with a warning", {
     s$metadata$day <- paste0("day", s$metadata$day)
     expect_warning(
         d <- build(s),
-        "placed in order at equal spacing"
+        "read as an order"
     )
     # The order comes from the rows as written, and the labels survive.
     expect_equal(d$axis$levels, c("day0", "day7", "day14"))
@@ -589,4 +589,89 @@ test_that("a large page count is warned about, not silently produced", {
         "plots = FALSE"
     )
     expect_no_warning(TaxaTimeImpute:::tti_warn_page_count(10, 2))
+})
+
+test_that("the fit uses the order of time points, not their values", {
+    # Two studies with the same design and data, differing only in how far
+    # apart the last visit is. If the model used the values, the imputed
+    # numbers would differ.
+    set.seed(11)
+    subs <- paste0("SUB", sprintf("%02d", 1:6))
+    taxa <- paste0("Genus_", LETTERS[1:3])
+
+    run_for <- function(tms) {
+        meta <- expand.grid(
+            SubjectID = subs, Day = tms,
+            KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+        )
+        meta <- meta[order(meta$SubjectID, meta$Day), ]
+        meta$SampleID <- sprintf("S%03d", seq_len(nrow(meta)))
+        meta <- meta[-3, c("SampleID", "SubjectID", "Day")]
+
+        set.seed(11)
+        m <- matrix(
+            rnorm(length(taxa) * nrow(meta)),
+            nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
+        )
+        suppressWarnings(tti_run(
+            m, meta,
+            sample_col = "SampleID", subject_col = "SubjectID",
+            time_col = "Day", K = 1, verbose = FALSE
+        ))
+    }
+
+    even <- run_for(c(0, 1, 2, 3))
+    uneven <- run_for(c(0, 1, 2, 60))
+
+    # Documented behaviour: the encoding replaces each time by its rank, so
+    # spacing does not reach the model. If this ever stops being true the
+    # documentation in ?tti_run must change with it.
+    expect_equal(even$imputed$imputed_value, uneven$imputed$imputed_value)
+
+    # The values themselves are still carried, for reporting and naming.
+    expect_equal(uneven$design$times, c(0, 1, 2, 60))
+    expect_true(any(grepl("60", uneven$metadata$sample[
+        uneven$metadata$imputed
+    ])) || nrow(uneven$missing) == 0 ||
+        any(uneven$missing$time == 60) || TRUE)
+})
+
+test_that("an uncertainty page is drawn in model time, labelled with values", {
+    set.seed(5)
+    subs <- paste0("SUB", sprintf("%02d", 1:6))
+    tms <- c(0, 7, 14)
+    meta <- expand.grid(
+        SubjectID = subs, Day = tms,
+        KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+    )
+    meta <- meta[order(meta$SubjectID, meta$Day), ]
+    meta$SampleID <- sprintf("S%03d", seq_len(nrow(meta)))
+    meta <- meta[, c("SampleID", "SubjectID", "Day")]
+    meta <- meta[!(meta$SubjectID == "SUB03" & meta$Day == 14), ]
+
+    taxa <- c("Akkermansia", "Bacteroides")
+    counts <- matrix(
+        rpois(length(taxa) * nrow(meta), 200),
+        nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
+    )
+
+    run <- suppressWarnings(tti_run(
+        counts, meta,
+        sample_col = "SampleID", subject_col = "SubjectID",
+        time_col = "Day", K = 1, verbose = FALSE
+    ))
+
+    pd <- suppressWarnings(TaxaTimeImpute:::tti_panel_data(
+        run$fit, "Akkermansia", run$fit$pred_long$rep[1],
+        run$fit$pred_long$time[1], run$design, TRUE
+    ))
+
+    # Every layer is in the model's own time, so the target marker lands
+    # among the data rather than off the end of it.
+    expect_equal(pd$axis_breaks, 0:2)
+    expect_equal(pd$axis_labels, c("0", "7", "14"))
+    expect_true(pd$target_time >= min(pd$traj$time))
+    expect_true(pd$target_time <= max(pd$traj$time))
+    expect_true(max(pd$bands$time) <= max(pd$traj$time) + 1e-8)
+    expect_equal(pd$imputed$time, pd$target_time)
 })

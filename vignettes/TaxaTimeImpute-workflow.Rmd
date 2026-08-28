@@ -84,8 +84,7 @@ package assumes a species.
 
 ## Time points
 
-Numeric times are used as they stand, so real spacing is respected. A study
-that records visits as labels can pass those instead:
+A study that records visits as labels can pass those instead of numbers:
 
 ```{r labels}
 lab <- demo$metadata
@@ -105,9 +104,15 @@ d2$axis$positions
 ```
 
 Labels are placed at consecutive positions, in the order given: the factor's
-levels if it is a factor, the order the rows appear otherwise. A warning says
-so, because equal spacing is an assumption that changes every fitted curve.
-If the real intervals are uneven, pass numbers.
+levels if it is a factor, the order the rows appear otherwise. A warning
+states the order so it can be checked.
+
+It is worth being clear about what the model does with time. **It uses the
+order of the time points, not their values.** Days 0, 7 and 14 are fitted
+exactly as 0, 1 and 2 would be, so a study with uneven intervals is not
+represented as uneven in the fitted curve. Passing numbers rather than
+labels does not change that; the values are kept for reporting, for the axis
+of the uncertainty pages, and for naming any column that has to be created.
 
 ## Raw counts or CLR
 

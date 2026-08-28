@@ -163,7 +163,7 @@ tti_panel_imputed <- function(fit, species_name, rep_id, time_id, design) {
     row <- pl$species == species_name & pl$rep == rep_id &
         pl$time == time_id
     data.frame(
-        time = design$times[time_id + 1L],
+        time = time_id,
         value = pl$imputed_value[row][1],
         stringsAsFactors = FALSE
     )
@@ -190,7 +190,7 @@ tti_panel_truth <- function(fit, species_name, rep_id, time_id, design) {
         return(data.frame(time = numeric(0), value = numeric(0)))
     }
     data.frame(
-        time = design$times[time_id + 1L], value = truth,
+        time = time_id, value = truth,
         stringsAsFactors = FALSE
     )
 }

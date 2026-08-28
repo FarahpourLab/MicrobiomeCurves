@@ -4,10 +4,15 @@
 # time. Studies do not always record one: a column may hold "baseline",
 # "week1", "week4", or a factor with its own level order.
 #
-# Numbers are used as they stand, so real spacing is respected. Labels are
-# placed at consecutive positions in the order they are given, which assumes
-# equal spacing between them. That assumption changes the shape of every
-# fitted curve, so it is stated out loud rather than made quietly.
+# What the model actually receives is the ORDER of the time points, not
+# their values: tti_encode_samples() replaces each time by its rank, so
+# times 0, 1, 2, 60 are fitted exactly as 0, 1, 2, 3 would be. The values
+# are kept here so reports, axes and column names can speak in the study's
+# own terms, but they do not enter the fit.
+#
+# Labels are therefore no worse off than numbers: both are reduced to an
+# order. What a label loses is only the ability to say what the intervals
+# were, which the fit was not using anyway.
 
 #' Build a numeric time axis from a metadata column
 #'
@@ -97,10 +102,11 @@ tti_axis_labels <- function(time_raw, txt, time_col) {
 
     warning(
         "metadata column '", time_col, "' is not numeric, so its values are ",
-        "placed in order at equal spacing: ", shown,
+        "read as an order: ", shown,
         ". The order comes from ", source_of_order,
-        ". If the real intervals are uneven, supply them as numbers instead, ",
-        "since the fitted curves depend on the spacing.",
+        ". Check it is the order you intend. Note that the fit uses the ",
+        "order of time points rather than their values, so numeric times ",
+        "would be treated the same way.",
         call. = FALSE
     )
 

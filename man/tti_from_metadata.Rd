@@ -28,10 +28,13 @@ identifiers. These must match the columns of \code{abundance}.}
 subject each sample was taken from.}
 
 \item{time_col}{Character name of the metadata column holding the time
-point. Numbers are used as they stand. Labels such as \code{"baseline"} and
-\code{"week1"} are placed in order at equal spacing, taking the order from
-the factor's levels if it is a factor and from the order the rows appear
-otherwise; this is reported, because the spacing changes the fit.}
+point. Either numbers or labels such as \code{"baseline"} and \code{"week1"};
+labels take their order from the factor's levels if the column is a
+factor and from the row order otherwise, which is reported so it can be
+checked. \strong{The model uses the order of the time points, not their
+values}, so uneven intervals are not represented in the curve; the
+values are kept for reporting and for the axis of the uncertainty
+pages.}
 
 \item{abundance_type}{Either \code{"clr"}, meaning the values are already
 centred log-ratios, or \code{"raw"}, meaning counts or relative abundances to

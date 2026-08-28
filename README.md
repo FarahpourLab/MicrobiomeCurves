@@ -123,10 +123,16 @@ Nothing is encoded in a column name. `SubjectID` identifies whatever the
 repeated measurements were taken on — a participant, a mouse, a plot, a
 bioreactor.
 
-**Time** may be numbers, in which case the real spacing is used, or labels
-such as `"Baseline"`, `"Week1"`, `"Week4"`. Labels are placed in order at
-equal spacing, taken from the factor's levels if it is a factor and from the
-row order otherwise. That is reported, because the spacing changes the fit.
+**Time** may be numbers or labels such as `"Baseline"`, `"Week1"`,
+`"Week4"`. Labels take their order from the factor's levels if the column is
+a factor and from the row order otherwise, which is reported so you can check
+it.
+
+Note that **the model uses the order of the time points, not their values**:
+days 0, 7 and 14 are fitted exactly as 0, 1 and 2 would be, so uneven
+intervals are not represented in the fitted curve. The values are kept for
+reporting, for the axis of the uncertainty pages, and for naming any column
+that has to be created.
 
 **Abundances** may be raw counts or relative abundances
 (`abundance_type = "raw"`, CLR-transformed for you with zeros replaced), or
