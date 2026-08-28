@@ -18,7 +18,11 @@ knitr::opts_chunk$set(
     collapse = TRUE,
     comment = "#>",
     fig.width = 7,
-    fig.height = 4
+    fig.height = 4,
+    # BiocStyle crops figures with magick or pdfcrop. Neither is needed for
+    # the figures here, and a build machine without them warns on every
+    # plot, so the hook is switched off.
+    crop = NULL
 )
 ```
 

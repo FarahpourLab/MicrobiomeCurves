@@ -108,6 +108,10 @@ jobs:
 
       - uses: r-lib/actions/setup-pandoc@v2
 
+      # The PDF vignette needs a LaTeX engine. The Bioconductor devel
+      # container has one; these runners do not.
+      - uses: r-lib/actions/setup-tinytex@v2
+
       - name: Point at Bioconductor devel
         run: |
           install.packages("BiocManager")
