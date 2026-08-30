@@ -60,3 +60,7 @@ for (fmt in c("html", "pdf")) {
 for (f in made) {
     message(sprintf("  %-34s %8.0f bytes", basename(f), file.info(f)$size))
 }
+
+# Note: devtools::install(".") drops the installed vignettes, because it
+# builds without them and an install replaces the whole directory. Use
+# devtools::install(".", build_vignettes = TRUE) to keep vignette() working.

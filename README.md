@@ -256,13 +256,28 @@ mc_plot(fit, species_name = "Taxon01", rep_id = "S01",
 vignette("MicrobiomeCurves-workflow", package = "MicrobiomeCurves")
 ```
 
-If `vignette()` reports that it is not found, the package was installed
-without them. Vignettes are not built by default:
+### If `vignette()` says it is not found
+
+Vignettes are not built by default, and **installing the package removes any
+that were there before**. Both of these leave you without one:
+
+```r
+remotes::install_github("FarahpourLab/MicrobiomeCurves")  # no vignettes
+devtools::install(".")                                    # removes them
+```
+
+Ask for them explicitly:
 
 ```r
 remotes::install_github("FarahpourLab/MicrobiomeCurves",
                         build_vignettes = TRUE)
+
+devtools::install(".", build_vignettes = TRUE)   # from a local checkout
 ```
+
+This is ordinary R behaviour rather than anything particular to this
+package: an install replaces the whole installed directory, so a build
+without vignettes drops the `doc/` folder a previous one created.
 
 For a reading copy outside R, `Rscript tools/render-docs.R` writes the same
 document to the package root as both HTML and PDF. The PDF is produced this
