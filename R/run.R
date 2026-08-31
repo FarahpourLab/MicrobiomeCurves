@@ -366,6 +366,8 @@ setMethod("mc_run", "matrix", function(
 #' @param min_observed Integer. Subjects with fewer observed time points are
 #'   reported.
 #' @param verbose Logical. Whether to report progress.
+#' @param subject_label Function mapping internal subject codes to the names
+#'   the caller used, so warnings name subjects the caller recognises.
 #'
 #' @return An object of class `mc_run`.
 #'
@@ -374,12 +376,14 @@ setMethod("mc_run", "matrix", function(
 mc_run_wide <- function(dat, taxon_col = "OTU_ID", K = NULL,
                          cluster_method = "fpca", use_outliers = TRUE,
                          seed = 123, times = NULL, parse_fun = NULL,
-                         make_col = NULL, min_observed = 2, verbose = TRUE) {
+                         make_col = NULL, min_observed = 2, verbose = TRUE,
+                         subject_label = identity) {
     if (is.null(make_col)) make_col <- mc_default_make_col
     say <- function(...) if (isTRUE(verbose)) message(...)
 
     info <- mc_survey_input(
-        dat, taxon_col, times, parse_fun, make_col, min_observed, say
+        dat, taxon_col, times, parse_fun, make_col, min_observed, say,
+        subject_label
     )
     dat_full <- mc_add_missing_columns(dat, info, say)
 

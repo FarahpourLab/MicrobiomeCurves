@@ -212,16 +212,20 @@ mc_run_result <- function(res, info, taxon_col) {
 #'
 #' @keywords internal
 #' @noRd
-mc_warn_about_input <- function(info, min_observed) {
+mc_warn_about_input <- function(info, min_observed,
+                                subject_label = identity) {
     # The column warnings are raised by mc_detect_missing(), which this path
     # has already been through, so only the thin-subject check runs here.
     thin <- info$observed$rep[info$observed$n_observed < min_observed]
     if (length(thin) > 0) {
+        # The fit works in internal subject codes. Name the subjects the way
+        # the caller wrote them, or the warning is unactionable.
+        named <- subject_label(thin)
         warning(
-            length(thin), " subject(s) have fewer than ", min_observed,
+            length(named), " subject(s) have fewer than ", min_observed,
             " observed time points: ",
-            paste(utils::head(thin, 5), collapse = ", "),
-            if (length(thin) > 5) ", ..." else "",
+            paste(utils::head(named, 5), collapse = ", "),
+            if (length(named) > 5) ", ..." else "",
             ". Their imputations fall back towards the population mean ",
             "curve and carry little subject-specific information.",
             call. = FALSE
@@ -245,7 +249,7 @@ mc_warn_about_input <- function(info, min_observed) {
 #' @keywords internal
 #' @noRd
 mc_survey_input <- function(dat, taxon_col, times, parse_fun, make_col,
-                             min_observed, say) {
+                             min_observed, say, subject_label = identity) {
     info <- mc_detect_missing(
         dat = dat,
         taxon_col = taxon_col,
@@ -268,7 +272,7 @@ mc_survey_input <- function(dat, taxon_col, times, parse_fun, make_col,
         length(info$times), " time point(s)."
     )
 
-    mc_warn_about_input(info, min_observed)
+    mc_warn_about_input(info, min_observed, subject_label)
     info
 }
 

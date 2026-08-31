@@ -54,7 +54,10 @@ mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
                 taxon_col = design$taxon_col,
                 K = K, cluster_method = cluster_method,
                 use_outliers = use_outliers, seed = seed,
-                min_observed = min_observed, verbose = verbose
+                min_observed = min_observed, verbose = verbose,
+                subject_label = function(codes) {
+                    design$subjects[as.integer(sub("^s", "", codes))]
+                }
             )
 
             mc_restore_names(fitted, design)
