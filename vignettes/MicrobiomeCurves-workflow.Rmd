@@ -3,6 +3,12 @@ title: "Imputing missing timepoints in longitudinal microbiome data"
 author:
 - name: Alireza Dostmohammadi
   email: alireza.dostmohammadi@uni-due.de
+- name: Mohammad Darbalaei
+  email: mohammad.darbalaei@uni-due.de
+- name: Daniel Hoffmann
+  email: daniel.hoffmann@uni-due.de
+- name: Farnoush Farahpour
+  email: farnoush.farahpour@uni-due.de
 package: MicrobiomeCurves
 output:
   BiocStyle::html_document:
