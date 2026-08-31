@@ -4,6 +4,8 @@
 
 # MicrobiomeCurves
 
+<div align="justify">
+
 MicrobiomeCurves imputes missing time points in longitudinal microbiome data. Missing samples arise when a subject withdraws or misses a scheduled collection, or when a subject dies or is culled before the time course ends. A collection may also yield too little material to process, fail during DNA extraction or library preparation, degrade during shipping, or produce too few reads to pass quality control.
 
 The package models each taxon's abundance over time as a smooth trajectory. It borrows recurring patterns across subjects using functional principal component analysis (FPCA) in the PACE formulation. Every imputed value has a 95% interval, and the package draws the trajectories used to infer it.
@@ -211,3 +213,5 @@ citation("MicrobiomeCurves")
 ## License
 
 GPL-3.
+
+</div>
