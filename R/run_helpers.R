@@ -208,7 +208,8 @@ mc_run_result <- function(res, info, taxon_col) {
 #' @param min_observed Integer. Observation count below which a subject is
 #'   flagged.
 #'
-#' @return `NULL`, invisibly. Called for its warnings.
+#' @return `NULL`, invisibly. Warns about unusable columns, and stops when a
+#'   subject has fewer than `min_observed` observed time points.
 #'
 #' @keywords internal
 #' @noRd
@@ -219,15 +220,20 @@ mc_warn_about_input <- function(info, min_observed,
     thin <- info$observed$rep[info$observed$n_observed < min_observed]
     if (length(thin) > 0) {
         # The fit works in internal subject codes. Name the subjects the way
-        # the caller wrote them, or the warning is unactionable.
+        # the caller wrote them, or the error is unactionable.
         named <- subject_label(thin)
-        warning(
+        counts <- info$observed$n_observed[
+            info$observed$n_observed < min_observed
+        ]
+        listed <- mc_fmt_some(paste0(named, " (", counts, ")"), n = 8)
+
+        stop(
             length(named), " subject(s) have fewer than ", min_observed,
-            " observed time points: ",
-            paste(utils::head(named, 5), collapse = ", "),
-            if (length(named) > 5) ", ..." else "",
-            ". Their imputations fall back towards the population mean ",
-            "curve and carry little subject-specific information.",
+            " observed time points, shown with their counts: ", listed,
+            ". Such a subject carries almost no information of its own, so ",
+            "its imputed values would be little more than the population ",
+            "trajectory. Either drop these subjects, or lower min_observed ",
+            "if you accept that.",
             call. = FALSE
         )
     }

@@ -120,8 +120,8 @@ enables functional-depth outlier screening.}
 
 \item{seed}{Integer random seed, passed to \code{\link{mc_fit}}.}
 
-\item{min_observed}{Integer. Observation count below which a subject is
-flagged in a warning. Default \code{2}.}
+\item{min_observed}{Integer. Observed time-point count below which a
+subject stops the run. Default \code{2}.}
 
 \item{verbose}{Logical. Print progress. Default \code{TRUE}.}
 
@@ -179,10 +179,13 @@ benchmark workflow. Because the true values are unknown, the
 
 \strong{Subjects with few observations.} A subject needs at least
 \code{min_observed} observed time points for its own trajectory to inform
-its imputation; below that the prediction falls back towards the population
-mean curve. Such subjects are still imputed and still contribute to the
-model fit, but a warning names them so the results can be interpreted
-accordingly. This mirrors the rule used throughout the published benchmark.
+its imputation. Below that, its imputed values would be little more than
+the population trajectory, so the run stops with an error naming the
+subjects and their counts. Drop those subjects, or lower
+\code{min_observed} if you accept values of that kind.
+
+\code{\link{mc_prepare}} and \code{\link{mc_fit}} do not apply this
+rule, because the benchmarking route hides values deliberately.
 
 The chosen assay is treated as a taxa-by-samples abundance matrix, expected
 to hold CLR-transformed values. Subject and time point are read from

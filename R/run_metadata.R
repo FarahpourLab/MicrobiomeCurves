@@ -20,8 +20,8 @@
 #' @param out_dir Directory to write the log and completed table into, or
 #'   `NULL` to write nothing.
 #' @param K,cluster_method,use_outliers,seed Passed to the fit.
-#' @param min_observed Integer. Subjects with fewer observed time points are
-#'   reported.
+#' @param min_observed Integer. Subjects with fewer observed time points
+#'   stop the run.
 #' @param verbose Logical. Whether to report progress.
 #'
 #' @return An object of class `mc_run`, with `completed` carrying the

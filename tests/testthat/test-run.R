@@ -53,26 +53,26 @@ test_that("mc_run refuses a table with nothing missing", {
     expect_error(quiet_run(dat, taxon_col = "OTU_ID"), "nothing to impute")
 })
 
-test_that("mc_run warns about subjects with too few observations", {
-    # min_observed = 3 makes every subject here "thin" without pushing any of
-    # them below what the fitting code can handle.
+test_that("mc_run refuses a subject with too few observations", {
+    # min_observed = 4 makes every subject here too thin to accept.
     dat <- data.frame(OTU_ID = c("T1", "T2", "T3"))
     for (s in c("S1", "S2", "S3", "S4")) {
         for (tt in 0:3) dat[[paste0(s, ".", tt)]] <- rnorm(3)
     }
     dat[["S1.3"]] <- NA_real_
 
-    w <- character()
-    withCallingHandlers(
-        run_wide_as_meta(dat, K = 1, min_observed = 4,
-            verbose = FALSE),
-        warning = function(x) {
-            w <<- c(w, conditionMessage(x))
-            invokeRestart("muffleWarning")
-        }
+    expect_error(
+        run_wide_as_meta(dat, K = 1, min_observed = 4, verbose = FALSE),
+        "fewer than 4 observed time points"
     )
 
-    expect_true(any(grepl("fewer than 4 observed time points", w)))
+    # The error names the subjects and their counts, so it can be acted on.
+    msg <- tryCatch(
+        run_wide_as_meta(dat, K = 1, min_observed = 4, verbose = FALSE),
+        error = function(e) conditionMessage(e)
+    )
+    expect_match(msg, "S1", fixed = TRUE)
+    expect_match(msg, "min_observed", fixed = TRUE)
 })
 
 test_that("fitting survives a subject with too few observations", {
@@ -114,29 +114,51 @@ test_that("fitting survives a subject with too few observations", {
     }
 })
 
-test_that("a subject with no observations falls back to the population mean", {
-    # With nothing subject-specific to condition on, the BLUP scores are zero
-    # and the prediction is the fitted mean curve. Every subject that has lost
-    # its whole trajectory must therefore receive the same value for a taxon.
+test_that("mc_run refuses a subject that lost its whole trajectory", {
     set.seed(2)
     dat <- data.frame(OTU_ID = c("T1", "T2"))
     for (s in c("S1", "S2", "S3", "S4", "S5")) {
         for (tt in 0:3) dat[[paste0(s, ".", tt)]] <- rnorm(2)
     }
-    # S1 and S2 lose everything
     for (tt in 0:3) {
         dat[[paste0("S1.", tt)]] <- NA_real_
         dat[[paste0("S2.", tt)]] <- NA_real_
     }
 
-    run <- quiet_run(dat, taxon_col = "OTU_ID", K = 1)
-    imp <- run$imputed
+    expect_error(
+        run_wide_as_meta(dat, K = 1, verbose = FALSE),
+        "fewer than 2 observed time points"
+    )
+})
+
+test_that("a subject with no observations falls back to the population mean", {
+    # mc_run refuses this data, but mc_prepare and mc_fit do not: the
+    # benchmarking route deliberately hides values. With nothing
+    # subject-specific to condition on, the BLUP scores are zero and the
+    # prediction is the fitted mean trajectory, so every subject that lost
+    # its whole trajectory receives the same value for a taxon.
+    set.seed(2)
+    dat <- data.frame(OTU_ID = c("T1", "T2"))
+    for (s in c("S1", "S2", "S3", "S4", "S5")) {
+        for (tt in 0:3) dat[[paste0(s, ".", tt)]] <- rnorm(2)
+    }
+    for (tt in 0:3) {
+        dat[[paste0("S1.", tt)]] <- NA_real_
+        dat[[paste0("S2.", tt)]] <- NA_real_
+    }
+
+    mask <- expand.grid(
+        rep = c("S1", "S2"), time = 0:3,
+        KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+    )
+    prep <- mc_prepare(dat, "OTU_ID", mask_list = mask)
+    imp <- mc_impute(quiet_fit(prep, K = 1))
 
     for (taxon in c("T1", "T2")) {
         for (tt in 0:3) {
             vals <- imp$imputed_value[
                 imp$species == taxon & imp$time == tt &
-                    imp$subject %in% c("S1", "S2")
+                    imp$rep %in% c("S1", "S2")
             ]
             expect_equal(length(vals), 2)
             expect_equal(vals[1], vals[2], tolerance = 1e-10)

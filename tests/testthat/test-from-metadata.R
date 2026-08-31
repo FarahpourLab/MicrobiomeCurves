@@ -676,7 +676,7 @@ test_that("an uncertainty page is drawn in model time, labelled with values", {
     expect_equal(pd$imputed$time, pd$target_time)
 })
 
-test_that("the thin-subject warning names subjects as the caller wrote them", {
+test_that("the thin-subject error names subjects as the caller wrote them", {
     set.seed(4)
     subs <- paste0("SUB", sprintf("%02d", 1:6))
     days <- c(0, 7, 14, 21)
@@ -698,29 +698,46 @@ test_that("the thin-subject warning names subjects as the caller wrote them", {
         nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
     )
 
-    warned <- character(0)
-    run <- withCallingHandlers(
+    msg <- tryCatch(
         mc_run(
             counts, meta,
             sample_col = "SampleID", subject_col = "SubjectID",
             time_col = "Day", K = 1, verbose = FALSE
         ),
-        warning = function(w) {
-            warned <<- c(warned, conditionMessage(w))
-            invokeRestart("muffleWarning")
-        }
+        error = function(e) conditionMessage(e)
     )
 
-    thin <- grep("observed time points", warned, value = TRUE)
-    expect_length(thin, 1)
+    # The caller's name and its count, not the internal code.
+    expect_match(msg, "SUB06 (1)", fixed = TRUE)
+    expect_false(grepl("\bs6\b", msg))
+    expect_match(msg, "fewer than 2 observed time points", fixed = TRUE)
+})
 
-    # The caller's name, not the internal code.
-    expect_match(thin, "SUB06", fixed = TRUE)
-    expect_false(grepl("\bs6\b", thin))
+test_that("min_observed lets a thin subject through when that is intended", {
+    set.seed(4)
+    subs <- paste0("SUB", sprintf("%02d", 1:6))
+    days <- c(0, 7, 14, 21)
 
-    # A thin subject is a warning, not an error: it is still imputed.
+    meta <- expand.grid(
+        SubjectID = subs, Day = days,
+        KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
+    )
+    meta <- meta[order(meta$SubjectID, meta$Day), ]
+    meta$SampleID <- sprintf("S%03d", seq_len(nrow(meta)))
+    meta <- meta[, c("SampleID", "SubjectID", "Day")]
+    meta <- meta[!(meta$SubjectID == "SUB06" & meta$Day > 0), ]
+
+    taxa <- paste0("Genus_", LETTERS[1:3])
+    counts <- matrix(
+        rnorm(length(taxa) * nrow(meta), mean = 2),
+        nrow = length(taxa), dimnames = list(taxa, meta$SampleID)
+    )
+
+    run <- suppressWarnings(mc_run(
+        counts, meta,
+        sample_col = "SampleID", subject_col = "SubjectID",
+        time_col = "Day", min_observed = 1, K = 1, verbose = FALSE
+    ))
     expect_s3_class(run, "mc_run")
-    sub6 <- run$imputed[run$imputed$subject == "SUB06", ]
-    expect_gt(nrow(sub6), 0)
-    expect_false(anyNA(sub6$imputed_value))
+    expect_true(any(run$imputed$subject == "SUB06"))
 })

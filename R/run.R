@@ -162,10 +162,13 @@ mc_detect_missing <- function(
 #'
 #' \strong{Subjects with few observations.} A subject needs at least
 #' \code{min_observed} observed time points for its own trajectory to inform
-#' its imputation; below that the prediction falls back towards the population
-#' mean curve. Such subjects are still imputed and still contribute to the
-#' model fit, but a warning names them so the results can be interpreted
-#' accordingly. This mirrors the rule used throughout the published benchmark.
+#' its imputation. Below that, its imputed values would be little more than
+#' the population trajectory, so the run stops with an error naming the
+#' subjects and their counts. Drop those subjects, or lower
+#' \code{min_observed} if you accept values of that kind.
+#'
+#' \code{\link{mc_prepare}} and \code{\link{mc_fit}} do not apply this
+#' rule, because the benchmarking route hides values deliberately.
 #'
 #' @param dat An abundance table: taxa in the \strong{row names}, one column
 #'   per sample, named however the study names them. Values are either
@@ -221,8 +224,8 @@ mc_detect_missing <- function(
 #' @param use_outliers Logical, passed to \code{\link{mc_fit}}. \code{TRUE}
 #'   enables functional-depth outlier screening.
 #' @param seed Integer random seed, passed to \code{\link{mc_fit}}.
-#' @param min_observed Integer. Observation count below which a subject is
-#'   flagged in a warning. Default \code{2}.
+#' @param min_observed Integer. Observed time-point count below which a
+#'   subject stops the run. Default \code{2}.
 #' @param verbose Logical. Print progress. Default \code{TRUE}.
 #'
 #' @return An object of class \code{"mc_run"}: a list with
@@ -363,8 +366,8 @@ setMethod("mc_run", "matrix", function(
 #' @param K,cluster_method,use_outliers,seed Passed to the fit.
 #' @param times Optional numeric vector of the intended time points.
 #' @param parse_fun,make_col Optional column-name parser and builder.
-#' @param min_observed Integer. Subjects with fewer observed time points are
-#'   reported.
+#' @param min_observed Integer. Subjects with fewer observed time points
+#'   stop the run.
 #' @param verbose Logical. Whether to report progress.
 #' @param subject_label Function mapping internal subject codes to the names
 #'   the caller used, so warnings name subjects the caller recognises.
