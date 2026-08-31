@@ -195,7 +195,7 @@ test_that("mc_run returns the caller's sample names", {
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
 
     cols <- setdiff(names(run$completed), "taxon")
@@ -214,7 +214,7 @@ test_that("observed values are not modified", {
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
     keep <- s$metadata$sample
     expect_equal(
@@ -229,7 +229,7 @@ test_that("completed columns are ordered by subject then time", {
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
     cols <- setdiff(names(run$completed), "taxon")
 
@@ -270,7 +270,7 @@ test_that("the long table uses the caller's subject and sample names", {
         s$abundance,
         metadata = s$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "day",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
 
     expect_true(all(c("subject", "sample", "time") %in% names(run$imputed)))
@@ -292,7 +292,7 @@ test_that("mc_demo_data returns the bundled example in study form", {
     run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
     expect_s3_class(run, "mc_run")
     expect_equal(nrow(run$missing), 3)
@@ -354,19 +354,22 @@ test_that("out_dir writes the completed table and a run log", {
     run <- suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
-        out_dir = out, K = 1, verbose = FALSE
+        out_dir = out, C = 1, verbose = FALSE
     ))
 
-    # table, log, and one uncertainty PDF
-    expect_length(run$files, 3)
+    # three tables, the log, and one uncertainty PDF
+    expect_length(run$files, 5)
     expect_true(all(file.exists(run$files)))
     expect_true(any(grepl("uncertainty_by_taxon[.]pdf$", run$files)))
 
-    tsv <- read.delim(file.path(out, "imputed_abundance.tsv"),
-        check.names = FALSE
-    )
-    expect_equal(nrow(tsv), nrow(run$completed))
-    expect_equal(ncol(tsv), ncol(run$completed))
+    for (nm in c("imputed_clr", "imputed_relative_abundance",
+                 "imputed_counts")) {
+        tbl <- read.delim(file.path(out, paste0(nm, ".tsv")),
+            check.names = FALSE
+        )
+        expect_equal(nrow(tbl), nrow(run$completed))
+        expect_equal(ncol(tbl), ncol(run$completed))
+    }
 
     log <- readLines(file.path(out, "imputation_log.txt"))
     expect_true(any(grepl("DESIGN", log)))
@@ -390,7 +393,7 @@ test_that("the log records label time points as the user wrote them", {
     suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
-        out_dir = out, K = 1, verbose = FALSE
+        out_dir = out, C = 1, verbose = FALSE
     ))
 
     log <- readLines(file.path(out, "imputation_log.txt"))
@@ -408,9 +411,9 @@ test_that("uncertainty plotting can be turned off and switched to png", {
     off <- suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
-        out_dir = out, plots = FALSE, K = 1, verbose = FALSE
+        out_dir = out, plots = FALSE, C = 1, verbose = FALSE
     ))
-    expect_length(off$files, 2)
+    expect_length(off$files, 4)
     expect_false(any(grepl("uncertainty", off$files)))
     unlink(out, recursive = TRUE)
 
@@ -420,7 +423,7 @@ test_that("uncertainty plotting can be turned off and switched to png", {
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         out_dir = png_out, plot_format = "png", dpi = 150,
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
     # One page per taxon now, not one per imputed value.
     pngs <- list.files(file.path(png_out, "uncertainty_png"), pattern = "png$")
@@ -435,7 +438,7 @@ test_that("dpi is validated", {
             s$abundance, s$metadata,
             sample_col = "sample", subject_col = "subject",
             time_col = "day", out_dir = tempdir(), dpi = -1,
-            K = 1, verbose = FALSE
+            C = 1, verbose = FALSE
         ),
         "dpi must be"
     )
@@ -446,7 +449,7 @@ test_that("every imputed cell gets an interval, screened-out subjects too", {
     run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
 
     unc <- do.call(rbind, lapply(
@@ -467,7 +470,7 @@ test_that("mc_uncertainty returns the interval behind each imputed value", {
     run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
 
     u <- mc_uncertainty(run, rownames(demo$counts)[1])
@@ -490,12 +493,12 @@ test_that("the uncertainty panel reflects whether screening was on", {
     on <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
-        use_outliers = TRUE, K = 1, verbose = FALSE
+        use_outliers = TRUE, C = 1, verbose = FALSE
     ))
     off <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
-        use_outliers = FALSE, K = 1, verbose = FALSE
+        use_outliers = FALSE, C = 1, verbose = FALSE
     ))
 
     pd_on <- suppressWarnings(MicrobiomeCurves:::mc_panel_data(
@@ -533,7 +536,7 @@ test_that("a taxon gets one page, with its imputed values as facets", {
     run <- suppressWarnings(mc_run(
         demo$counts, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
-        K = 1, verbose = FALSE
+        C = 1, verbose = FALSE
     ))
 
     taxa <- unique(run$fit$pred_long$species)
@@ -569,7 +572,7 @@ test_that("a taxon with many imputed values spills onto further pages", {
     run <- suppressWarnings(mc_run(
         counts, meta,
         sample_col = "SampleID", subject_col = "SubjectID",
-        time_col = "Day", K = 1, verbose = FALSE
+        time_col = "Day", C = 1, verbose = FALSE
     ))
 
     sp <- unique(run$fit$pred_long$species)[1]
@@ -616,7 +619,7 @@ test_that("the fit uses the order of time points, not their values", {
         suppressWarnings(mc_run(
             m, meta,
             sample_col = "SampleID", subject_col = "SubjectID",
-            time_col = "Day", K = 1, verbose = FALSE
+            time_col = "Day", C = 1, verbose = FALSE
         ))
     }
 
@@ -658,7 +661,7 @@ test_that("an uncertainty page is drawn in model time, labelled with values", {
     run <- suppressWarnings(mc_run(
         counts, meta,
         sample_col = "SampleID", subject_col = "SubjectID",
-        time_col = "Day", K = 1, verbose = FALSE
+        time_col = "Day", C = 1, verbose = FALSE
     ))
 
     pd <- suppressWarnings(MicrobiomeCurves:::mc_panel_data(
@@ -702,7 +705,7 @@ test_that("the thin-subject error names subjects as the caller wrote them", {
         mc_run(
             counts, meta,
             sample_col = "SampleID", subject_col = "SubjectID",
-            time_col = "Day", K = 1, verbose = FALSE
+            time_col = "Day", C = 1, verbose = FALSE
         ),
         error = function(e) conditionMessage(e)
     )
@@ -736,7 +739,7 @@ test_that("min_observed lets a thin subject through when that is intended", {
     run <- suppressWarnings(mc_run(
         counts, meta,
         sample_col = "SampleID", subject_col = "SubjectID",
-        time_col = "Day", min_observed = 1, K = 1, verbose = FALSE
+        time_col = "Day", min_observed = 1, C = 1, verbose = FALSE
     ))
     expect_s3_class(run, "mc_run")
     expect_true(any(run$imputed$subject == "SUB06"))

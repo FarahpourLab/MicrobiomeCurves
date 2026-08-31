@@ -6,11 +6,9 @@
 
 # Introduction
 
-Longitudinal microbiome studies often lose whole samples. A subject may lack a sample at one time point, or a library may fail quality control, leaving an entire column absent from the abundance table. Removing the affected subjects discards usable data, while leaving the gaps can affect downstream calculations.
+Longitudinal microbiome studies often lose whole samples because a scheduled collection was missed, DNA extraction failed or too few reads remained after quality control. Removing the affected subjects discards usable data, while leaving the gaps can affect downstream calculations.
 
-`r Biocpkg("MicrobiomeCurves")` estimates the missing values and returns a completed abundance table. It models each taxon over time, uses information from the available subjects, and calculates an imputed value for every taxon in each missing sample. The package also provides optional outlier screening, clustering and uncertainty intervals, as well as tools for benchmarking imputation against deliberately hidden values.
-
-The package handles missing whole samples. A sample column must therefore be either fully observed or entirely `NA`. A column containing values for some taxa and `NA` for others represents a different problem, so the package reports it as an error rather than imputing it.
+`r Biocpkg("MicrobiomeCurves")` imputes the missing values and returns a completed abundance table. It models each taxon over time, uses information from the available subjects, and calculates an imputed value for every taxon in each missing sample. The package also provides optional outlier screening, clustering and uncertainty intervals, as well as tools for benchmarking imputation against deliberately hidden values.
 
 ```{r load}
 library(MicrobiomeCurves)
@@ -25,37 +23,35 @@ knitr::include_graphics("Fig_FPCA_concept.png")
 
 Panel a starts with an abundance table. Taxa are rows and samples are columns. A sample is one subject at one time point and holds a value for every taxon. Here, subject means whatever the repeated measurements were taken on, such as a mouse, participant, plot or bioreactor.
 
-A missing sample removes every taxon at that time point. The gap is therefore a whole column, not a scattered cell. MicrobiomeCurves fills these missing columns. It does not fill scattered `NA` values within a measured sample, and rejects a column that contains values for some taxa and `NA` for others.
+A missing sample removes every taxon at that time point. The gap is therefore a whole column, not a scattered cell. MicrobiomeCurves imputes these missing columns.
 
 Panel b shows the next step for one taxon. The package separates that taxon from the table and treats its values as a set of trajectories, one for each subject. It repeats the same process separately for every taxon.
 
 The values are analysed on the centred log ratio (CLR) scale. When `abundance_type = "raw"`, the package first replaces zeros and then transforms the raw counts to CLR values.
 
-Panel c shows how the package learns the common patterns in the trajectories for one taxon. It combines information from all subjects to find a mean trajectory and a small set of recurring ways in which subjects differ from that mean. Each subject can then be represented by a small number of scores that describe how strongly it follows each pattern. This technique is functional principal component analysis (FPCA), using the PACE formulation through `fdapace::FPCA`.
+Panel c shows how the package learns the common patterns in the trajectories for one taxon. It combines information from the available subjects to find a mean trajectory and a small set of recurring ways in which subjects differ from that mean. Each subject can then be represented by a small number of scores that describe how strongly it follows each pattern. This technique is functional principal component analysis (FPCA), using the PACE formulation through `fdapace::FPCA`.
 
-The recurring patterns are called eigenfunctions. The package keeps enough of them to explain 99 percent of the variation, following the `fdapace` default. It combines the mean trajectory, the retained eigenfunctions and each subject's scores to obtain a fitted trajectory.
+The recurring patterns are called eigenfunctions. Each one describes a common way in which trajectories differ from the mean. The package keeps enough eigenfunctions to explain 99 percent of the variation, following the `fdapace` default. It combines the mean trajectory, the retained eigenfunctions and each subject's scores to obtain a fitted trajectory.
 
-This shared fit lets subjects borrow information from one another. The covariance surface is calculated from all subjects together, so the method supports sparse and irregular sets of measured time points. A subject with few measured samples can still receive a fitted trajectory, although that trajectory is drawn towards the population mean.
+This shared fit lets subjects borrow information from one another, which makes sparse and irregular sampling designs workable. For each imputed cell, the covariance surface is calculated from the subjects remaining after outlier screening. When clustering is used, it is calculated from the target subject's cluster. If that cluster contains only the target subject, the package instead uses every available subject. A subject with few measured samples can still receive a fitted trajectory, although that trajectory is drawn towards the mean of the subjects used for the fit.
 
 Panel d shows optional outlier screening, which is on by default and controlled by `use_outliers`. The package gives each fitted trajectory a Fraiman-Muniz depth. Depth measures how central that trajectory is relative to the other trajectories for the same taxon.
 
 Trajectories below the 5 percent depth quantile are flagged and removed before the model is fitted again. The subject being imputed is always kept, even if its trajectory is flagged. If screening would leave fewer than two trajectories, outlier screening is skipped for that taxon.
 
-Panel e shows the optional clustering step, controlled by the package argument `K`. Clustering lets the final fit borrow most strongly from subjects whose trajectories are similar to that of the target subject. The FPCA model is fitted again within the target subject's cluster before the missing value is calculated.
+Panel e shows the optional clustering step, controlled by the package argument `C`. Clustering lets the final fit borrow most strongly from subjects whose trajectories are similar to that of the target subject. The FPCA model is fitted again within the target subject's cluster before the missing value is calculated.
 
-With `K = 1`, all subjects are pooled into one cluster. This is the fastest route. With `K = NULL`, the package chooses the number of clusters separately for each taxon by mean silhouette width.
+With `C = 1`, all subjects are pooled into one cluster. This is the fastest route. With `C = NULL`, the package chooses the number of clusters separately for each taxon by mean silhouette width.
 
 The `cluster_method` argument controls what is clustered. The default, `"fpca"`, applies k-means to the FPCA scores. The alternative, `"kmeans_fd"`, applies functional k-means to the fitted trajectories through `fda.usc::kmeans.fd`. If functional k-means fails on a small set of trajectories, the package falls back to `"fpca"` and counts and reports every fallback.
 
-The imputed value in panel e is the best linear unbiased prediction, or BLUP, at the missing time point. It is conditioned on the target subject's measured values and comes from the FPCA fit for that subject's cluster. The shaded band represents uncertainty around the prediction.
+The imputed value in panel e is the best linear unbiased prediction, or BLUP, at the missing time point. It is conditioned on the target subject's measured values and comes from the FPCA fit for that subject's cluster. The shaded band represents uncertainty around the imputed value.
 
 The standard interval is calculated analytically from the covariance of the FPCA scores and includes noise. A bootstrap interval is also available through `mc_ci`. The uncertainty pages show every subject's trajectory, the fitted trajectory, the imputed value and its 95 percent band.
 
-The figure uses `K` for the number of FPCA components needed to explain 99 percent of the variation. The package argument `K` is the number of clusters. These are different quantities.
+In the figure, `K` is the number of FPCA components retained to explain 99 percent of the variation. The package argument `C` is the number of clusters, so the different quantities use different letters to avoid confusion.
 
-The model uses the order of the time points, not their values. Days 0, 7 and 90 are fitted as if they were evenly spaced. This behaviour was verified by test. The original time values are retained for reporting, uncertainty-page axes and the names of any columns that must be created.
-
-There are two entry points. `mc_run` detects missing samples from an abundance table and its metadata, then returns the completed table. Because the missing values have no known truth, `mc_metrics` is not meaningful for this fit. For benchmarking, `mc_prepare` and `mc_fit` use an internal wide layout and a mask to hide known values deliberately, allowing `mc_metrics` to compare the imputed values with the truth.
+The model uses only the order of the time points, as described under Time points. The package has separate entry points for study gaps and benchmarking, as described under Benchmarking.
 
 # Giving the package your own tables
 
@@ -95,7 +91,7 @@ package assumes a species.
 
 ## Time points
 
-A study that records visits as labels can pass those instead of numbers:
+A study that records time points as labels can pass those instead of numbers:
 
 ```{r labels}
 lab <- demo$metadata
@@ -118,18 +114,18 @@ Labels are placed at consecutive positions, in the order given: the factor's
 levels if it is a factor, the order the rows appear otherwise. A warning
 states the order so it can be checked.
 
-It is worth being clear about what the model does with time. **It uses the
-order of the time points, not their values.** Days 0, 7 and 14 are fitted
-exactly as 0, 1 and 2 would be, so a study with uneven intervals is not
-represented as uneven in the fitted curve. Passing numbers rather than
-labels does not change that; the values are kept for reporting, for the axis
-of the uncertainty pages, and for naming any column that has to be created.
+The model uses the order of the time points, not their values. Time values 0,
+7 and 14 are fitted exactly as 0, 1 and 2 would be. Uneven intervals are
+therefore not represented as uneven in the fitted trajectory. Passing numbers
+rather than labels does not change this behaviour. The values are kept for
+reporting, for the axes of the uncertainty pages, and for naming any column
+that has to be created.
 
 ## Raw counts or CLR
 
-The model works on centred log-ratios. If the table holds raw counts or
-relative abundances, say so and the transformation is done here, replacing
-zeros first:
+The model works on CLR values. If the table holds raw counts or relative
+abundances, set `abundance_type = "raw"` and the package replaces zeros before
+applying the transformation:
 
 ```{r raw, eval = FALSE}
 run <- mc_run(
@@ -141,20 +137,44 @@ run <- mc_run(
 
 ## Writing results to disk
 
-Give `out_dir` and the run writes three things:
+Give `out_dir` and the run writes five files:
 
 | file | contents |
 | --- | --- |
-| `imputed_abundance.tsv` | the completed table |
-| `imputation_log.txt` | design, time order, gaps, warnings |
+| `imputed_clr.tsv` | the completed table on the CLR scale produced by the model |
+| `imputed_relative_abundance.tsv` | proportions that sum to one within each sample |
+| `imputed_counts.tsv` | proportions multiplied by a library size |
+| `imputation_log.txt` | design, time order, gaps, output scales and warnings |
 | `uncertainty_by_taxon.pdf` | one page per taxon, with intervals |
+
+The model produces values on the CLR scale. Relative abundances and counts are
+derived from those values. Converting CLR values to proportions uses a
+softmax transformation, which always gives every taxon a positive value. The
+package restores structural zeros when the input contains enough information
+to identify them.
+
+With `abundance_type = "raw"`, the supplied counts provide the library sizes
+and structural zeros. For a collected sample, the counts output preserves the
+supplied counts exactly, and the relative abundance output preserves their
+proportions, including zeros. Only created samples are reconstructed. A
+created sample uses the median library size of the study. A taxon is written
+as zero when its reconstructed abundance falls below the value used to
+replace zeros during the CLR transformation.
+
+With `abundance_type = "clr"`, the original library sizes and structural zeros
+are unavailable. The relative abundances are therefore strictly positive, so
+an original zero appears as a small positive value. The counts output uses
+one library size for the whole table. This size is inferred from the rarest
+taxon and capped. The resulting counts are on a plausible scale, not the
+original count scale. The log records which case applied, so the results
+folder describes how its derived scales were produced.
 
 ```{r outdir}
 out <- file.path(tempdir(), "mc_example")
 run <- suppressWarnings(mc_run(
     demo$counts, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
-    out_dir = out, K = 1, verbose = FALSE
+    out_dir = out, C = 1, verbose = FALSE
 ))
 
 basename(run$files)
@@ -170,9 +190,11 @@ a taxon whose gaps rest on very little information declares itself:
 mc_uncertainty(run, rownames(demo$counts)[1])
 ```
 
-`plots = FALSE` turns the drawing off. `plot_format = "png"` (or `"both"`)
-writes one image per taxon at `dpi`, which defaults to 300; the PDF is vector
-art and stays sharp at any size, so `dpi` does not apply to it.
+`plots = FALSE` turns the drawing off. `plot_format = "png"` or `"both"`
+writes one PNG per page into the `uncertainty_png` subdirectory of `out_dir`.
+A taxon with many imputed values can span several pages and therefore produce
+several PNG files. PNG files are written at `dpi`, which defaults to 300. The
+PDF uses vector graphics, so `dpi` does not apply to it.
 
 Results come back under your own sample names, ordered by subject and then
 time:
@@ -181,7 +203,7 @@ time:
 run$completed[1:3, 1:5]
 ```
 
-A column is added only for a subject-timepoint that had no sample. It is
+A column is added only when a subject has no sample at a time point. It is
 named from its subject and time, and flagged in the returned metadata:
 
 ```{r added}
@@ -212,7 +234,7 @@ info$missing
 
 Two reasons appear:
 
-* `absent_column`: the subject-timepoint has no column.
+* `absent_column`: a subject has no column at that time point.
 * `all_na`: the column exists but every taxon in it is `NA`.
 
 A sample column must be either fully observed or entirely `NA`. A column
@@ -225,12 +247,12 @@ info$partial_na
 ```
 
 If that error appears, correct the data first: make the column entirely `NA`
-if the sample is genuinely missing, or fill in the individual `NA` values if
-it is not.
+if the sample is genuinely missing, or supply the individual missing values
+if it is not.
 
-It is also worth checking how many observations each subject retains. A
-subject with fewer than two informative points contributes to the model fit
-but has little of its own trajectory to condition on:
+It is also worth checking how many measured values each subject retains. A
+subject with fewer than two informative time points contributes to the model
+fit but has little of its own trajectory to condition on:
 
 ```{r observed}
 head(info$observed)
@@ -239,7 +261,7 @@ head(info$observed)
 # Imputing a table
 
 `mc_run()` does the whole job: it converts the tables, reports what is
-missing, fits the model, and returns the table with the gaps filled. It was
+missing, fits the model, and returns the table with the gaps imputed. It was
 run above; the pieces of its result are:
 
 ```{r run}
@@ -279,7 +301,7 @@ out <- mc_run(
     se,
     subject_col = "subject",
     time_col = "timepoint",
-    K = 1,
+    C = 1,
     verbose = FALSE
 )
 
@@ -287,7 +309,7 @@ assayNames(out)
 ```
 
 The input assay is never modified. The completed matrix arrives as a new
-assay, so observed and imputed values stay distinguishable:
+assay, so measured and imputed values stay distinguishable:
 
 ```{r se-assays}
 assay(out, "imputed")[seq_len(3), seq_len(4)]
@@ -300,9 +322,9 @@ metadata(out)$mc_run$missing
 metadata(out)$mc_run$added_samples
 ```
 
-If a subject-timepoint had no sample at all, there is no column to write the
-imputed values into, so one is appended and `added_samples` names it. The
-returned object can therefore be wider than the input.
+If a subject has no sample at a time point, there is no column to write the
+imputed values into. A column is therefore appended and `added_samples` names
+it. The returned object can be wider than the input.
 
 Subject identifiers and time points are recoded internally, so names may
 contain dots or spaces and time points need not be integers or evenly spaced.
@@ -310,7 +332,7 @@ contain dots or spaces and time points need not be integers or evenly spaced.
 # Benchmarking: masking values you already have
 
 To measure accuracy you need ground truth, so you hide values you already
-have and score the predictions. That is a different entry point:
+have and score the imputed values. That is a different entry point:
 `mc_prepare()` takes an explicit mask.
 
 ```{r bench}
@@ -320,7 +342,7 @@ prep <- mc_prepare(
     mask_list = data.frame(rep = "S01", time = 3)
 )
 
-fit <- mc_fit(prep, K = 1)
+fit <- mc_fit(prep, C = 1)
 imputed <- mc_impute(fit)
 
 head(imputed[, c("species", "true_value", "imputed_value")])
@@ -335,7 +357,8 @@ c(MSE = metrics$MSE_overall, RMSE = metrics$RMSE_overall)
 
 After `mc_run()` the true values were never observed, so `true_value` and
 `se` are `NA` and `mc_metrics()` is not meaningful. The two entry points
-answer different questions.
+answer different questions. Use `mc_run()` for gaps in study data. Use
+`mc_prepare()` and `mc_fit()` to benchmark deliberately hidden values.
 
 # Uncertainty
 
@@ -376,29 +399,34 @@ mc_plot(
 )
 ```
 
-Two panels are returned: the fitted curve with its band on the left, and the
-subject's raw observations on the right.
+Two panels are returned: the fitted trajectory with its band on the left, and
+the subject's measured values on the right.
 
 Reading it:
 
-* The **imputed value** sits on the fitted curve at the marked time. It is not
+* The **imputed value** sits on the fitted trajectory at the marked time. It is not
   interpolated between neighbouring points; it is where the shared
-  time-course, conditioned on this subject's own observations, places the
+  time-course, conditioned on this subject's own measured values, places the
   subject.
 * The **width of the band** is the honest part. It widens where the subject
-  has few nearby observations, so a narrow band means the estimate is well
-  determined and a wide one means it rests mostly on the population curve.
+  has few nearby measured values, so a narrow band means the estimate is well
+  determined and a wide one means it rests mostly on the population trajectory.
   Compare it against the spread of the observed points: a band much wider than
   that spread is a weakly informed imputation, and worth reporting as such.
-* **Observed points lying far from the curve** mean this subject departs from
+* **Measured values lying far from the trajectory** mean this subject departs from
   the shape shared across subjects. The imputation still borrows that shape,
   so treat such a value with more caution than the band alone suggests.
 
 # Optional refinements
 
-Both optional refinements were benchmarked in the accompanying publication. Outlier screening improved the results for 20 of 121 masks in one cohort, but reduced accuracy when more than 0.3 of the values were masked. Clustering did not improve accuracy for the masks that were tested.
+Benchmarking runs with the package found that outlier screening improved
+results for 20 of 121 masks in one cohort. It reduced accuracy when more than
+0.3 of the values were masked. Clustering did not improve accuracy for the
+masks tested.
 
-These findings do not show either refinement to be a general improvement. The options are therefore provided for diagnostic use rather than as changes that should be expected to improve results by default.
+These findings do not show either refinement to be a general improvement. The
+options are therefore provided for diagnostic use rather than as defaults
+expected to improve results.
 
 # Reproducibility
 

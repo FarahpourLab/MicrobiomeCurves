@@ -217,8 +217,8 @@ mc_detect_missing <- function(
 #'   own page of \code{uncertainty_by_taxon.pdf}), \code{"png"} (one file
 #'   per taxon under \code{uncertainty_png/}, at \code{dpi}), or
 #'   \code{"both"}.
-#' @param K Integer or \code{NULL}. Number of trajectory clusters, passed
-#'   straight to \code{\link{mc_fit}}. \code{NULL} selects K per taxon by mean
+#' @param C Integer or \code{NULL}. Number of trajectory clusters, passed
+#'   straight to \code{\link{mc_fit}}. \code{NULL} selects C per taxon by mean
 #'   silhouette width.
 #' @param cluster_method Character, passed to \code{\link{mc_fit}}.
 #' @param use_outliers Logical, passed to \code{\link{mc_fit}}. \code{TRUE}
@@ -258,7 +258,7 @@ mc_detect_missing <- function(
 #' run <- suppressWarnings(mc_run(
 #'     demo$counts, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
-#'     K = 1, verbose = FALSE
+#'     C = 1, verbose = FALSE
 #' ))
 #'
 #' # what was missing, and why
@@ -275,7 +275,7 @@ mc_detect_missing <- function(
 #' run2 <- suppressWarnings(mc_run(
 #'     demo$counts, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
-#'     out_dir = out, K = 1, verbose = FALSE
+#'     out_dir = out, C = 1, verbose = FALSE
 #' ))
 #' basename(run2$files)
 #'
@@ -302,7 +302,7 @@ setMethod("mc_run", "data.frame", function(
     plots = TRUE,
     dpi = 300,
     plot_format = c("pdf", "png", "both"),
-    K = NULL,
+    C = NULL,
     cluster_method = c("fpca", "kmeans_fd"),
     use_outliers = TRUE,
     seed = 123,
@@ -310,11 +310,12 @@ setMethod("mc_run", "data.frame", function(
     verbose = TRUE,
     ...
 ) {
+    mc_check_dots(...)
     mc_run_from_metadata(
         dat, metadata, sample_col, subject_col, time_col,
         match.arg(abundance_type), pseudocount, out_dir,
         plots, dpi, match.arg(plot_format),
-        K, match.arg(cluster_method), use_outliers, seed,
+        C, match.arg(cluster_method), use_outliers, seed,
         min_observed, verbose
     )
 })
@@ -333,7 +334,7 @@ setMethod("mc_run", "matrix", function(
     plots = TRUE,
     dpi = 300,
     plot_format = c("pdf", "png", "both"),
-    K = NULL,
+    C = NULL,
     cluster_method = c("fpca", "kmeans_fd"),
     use_outliers = TRUE,
     seed = 123,
@@ -344,11 +345,12 @@ setMethod("mc_run", "matrix", function(
     # A matrix is the natural shape for taxa-in-row-names abundance data, so
     # it is accepted alongside a data.frame rather than being coerced by the
     # caller.
+    mc_check_dots(...)
     mc_run_from_metadata(
         dat, metadata, sample_col, subject_col, time_col,
         match.arg(abundance_type), pseudocount, out_dir,
         plots, dpi, match.arg(plot_format),
-        K, match.arg(cluster_method), use_outliers, seed,
+        C, match.arg(cluster_method), use_outliers, seed,
         min_observed, verbose
     )
 })
@@ -363,7 +365,7 @@ setMethod("mc_run", "matrix", function(
 #'
 #' @param dat A data.frame in that layout.
 #' @param taxon_col Character name of the taxon identifier column.
-#' @param K,cluster_method,use_outliers,seed Passed to the fit.
+#' @param C,cluster_method,use_outliers,seed Passed to the fit.
 #' @param times Optional numeric vector of the intended time points.
 #' @param parse_fun,make_col Optional column-name parser and builder.
 #' @param min_observed Integer. Subjects with fewer observed time points
@@ -376,7 +378,7 @@ setMethod("mc_run", "matrix", function(
 #'
 #' @keywords internal
 #' @noRd
-mc_run_wide <- function(dat, taxon_col = "OTU_ID", K = NULL,
+mc_run_wide <- function(dat, taxon_col = "OTU_ID", C = NULL,
                          cluster_method = "fpca", use_outliers = TRUE,
                          seed = 123, times = NULL, parse_fun = NULL,
                          make_col = NULL, min_observed = 2, verbose = TRUE,
@@ -392,7 +394,7 @@ mc_run_wide <- function(dat, taxon_col = "OTU_ID", K = NULL,
 
     res <- mc_run_pipeline(
         dat_full, taxon_col, parse_fun, info,
-        K, cluster_method, use_outliers, seed, say
+        C, cluster_method, use_outliers, seed, say
     )
 
     mc_run_result(res, info, taxon_col)

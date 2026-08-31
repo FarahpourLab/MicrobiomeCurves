@@ -9,3 +9,7 @@
 ^tools$
 ^MicrobiomeCurves-workflow\.(html|pdf)$
 ^vignettes/.*\.(log|tex|aux|out|toc)$
+^man/figures$
+^doc$
+^Meta$
+^tests/testthat/_problems$

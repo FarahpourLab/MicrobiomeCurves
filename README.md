@@ -1,16 +1,22 @@
-# MicrobiomeCurves
-
 <!-- badges: start -->
 [![check-bioc](https://github.com/FarahpourLab/MicrobiomeCurves/actions/workflows/check-bioc.yaml/badge.svg)](https://github.com/FarahpourLab/MicrobiomeCurves/actions/workflows/check-bioc.yaml)
 <!-- badges: end -->
 
-MicrobiomeCurves imputes missing time points in longitudinal microbiome data.
+# MicrobiomeCurves
 
-A whole sample may be missing because it was not collected or failed quality control. MicrobiomeCurves estimates each missing value by modelling taxon abundance over time as a smooth trajectory and sharing information across subjects with Functional Principal Component Analysis using the PACE formulation. The covariance surface is estimated from all subjects, which supports sparse studies and samples collected at irregular sets of time points.
+MicrobiomeCurves imputes missing time points in longitudinal microbiome data. Missing samples arise when a subject withdraws or misses a scheduled collection, or when a subject dies or is culled before the time course ends. A collection may also yield too little material to process, fail during DNA extraction or library preparation, degrade during shipping, or produce too few reads to pass quality control.
 
-The package handles missing whole samples. Each sample column must be either fully observed or entirely `NA`. If a column contains observed values for some taxa and `NA` for others, the package reports an error instead of imputing it.
+The package models each taxon's abundance over time as a smooth trajectory. It borrows recurring patterns across subjects using functional principal component analysis (FPCA) in the PACE formulation. Every imputed value has a 95% interval, and the package draws the trajectories used to infer it.
+
+The covariance surface that drives FPCA is estimated from the subjects that remain after outlier screening, which removes trajectories that sit far from the rest. When clustering is used, it is estimated from the cluster containing the target subject. This sharing across subjects allows the model to fit data in which each subject has only a few time points.
+
+![How MicrobiomeCurves imputes a missing sample](man/figures/README-method.png)
+
+The vignette walks through this figure panel by panel.
 
 ## Installation
+
+MicrobiomeCurves requires R 4.5.0 or later. Its CRAN dependencies are `cluster`, `dplyr`, `fda.usc`, `fdapace`, `ggplot2`, `magrittr`, `patchwork`, `stringr`, `tibble`, `tidyr`, and `withr`. Its Bioconductor dependencies are `S4Vectors`, `SummarizedExperiment`, and `TreeSummarizedExperiment`. It also uses the base R packages `grDevices`, `grid`, `methods`, `stats`, and `utils`. Nothing is installed from GitHub, and no system library beyond R itself is needed.
 
 ```r
 if (!requireNamespace("remotes", quietly = TRUE))
@@ -20,11 +26,9 @@ remotes::install_github("FarahpourLab/MicrobiomeCurves",
                         build_vignettes = TRUE)
 ```
 
-The package has no GitHub-only dependencies and needs no system libraries beyond those required by R. Installation does not download anything else.
-
 ## Quick start
 
-The input consists of an abundance table and a metadata table. This example builds both from scratch, so the complete block can be run as written:
+Provide an abundance table with taxa in the row names and one column per sample. Provide a metadata table with one row per sample. The metadata identifies the sample, subject, and time point.
 
 ```r
 library(MicrobiomeCurves)
@@ -46,7 +50,7 @@ meta$SampleID <- sprintf("S%03d", seq_len(nrow(meta)))
 meta <- meta[, c("SampleID", "SubjectID", "Day")]
 rownames(meta) <- NULL
 
-# SUB03 missed the day-14 visit, so that sample was never collected.
+# SUB03 missed the day-14 collection, so that sample does not exist.
 meta <- meta[!(meta$SubjectID == "SUB03" & meta$Day == 14), ]
 
 # counts: a taxa-by-samples matrix. Taxa in the ROW NAMES, one column per
@@ -58,8 +62,6 @@ counts <- matrix(
     dimnames = list(taxa, meta$SampleID)
 )
 ```
-
-This produces a 4 x 17 abundance matrix and a metadata table with 17 rows:
 
 ```r
 counts[, 1:5]
@@ -79,7 +81,7 @@ head(meta)
 #> 6     S006     SUB02  14
 ```
 
-Six subjects measured at three time points would give 18 samples, but this dataset has 17. The sample for SUB03 at day 14 is absent, and the package fills that gap.
+Six subjects at three time points would give 18 samples. This one has 17. The sample for SUB03 at day 14 does not exist, and that is the gap the package fills.
 
 ```r
 run <- mc_run(
@@ -89,8 +91,8 @@ run <- mc_run(
     time_col       = "Day",
     abundance_type = "raw",   # counts; use "clr" if already transformed
     out_dir        = "results",
-    K = 1                     # pool all subjects when fitting each taxon;
-                              # K = NULL groups similar trajectories instead
+    C = 1                     # pool all subjects when fitting each taxon;
+                              # C = NULL groups similar trajectories instead
                               # and picks how many groups per taxon
 )
 #> Transforming raw abundances to centred log-ratios.
@@ -103,117 +105,102 @@ run <- mc_run(
 #> Fitting FPCA model over 4 taxa ...
 #> Done: 4 of 4 cell(s) imputed.
 #> Drawing uncertainty for 4 taxa ...
-#> Wrote 3 file(s) to results: imputed_abundance.tsv, imputation_log.txt,
-#>   uncertainty_by_taxon.pdf
+#> Wrote 5 file(s) to results: imputed_clr.tsv,
+#>   imputed_relative_abundance.tsv, imputed_counts.tsv,
+#>   imputation_log.txt, uncertainty_by_taxon.pdf
 ```
 
-Column names do not need to encode study information. `SubjectID` can identify any subject on which repeated measurements were taken, such as a human participant, mouse, plot, or bioreactor.
+Set `abundance_type = "raw"` for counts or relative abundances. The package replaces zeros and applies the centred log-ratio (CLR) transformation. Use `"clr"` for values that are already transformed.
 
-**Time** can be numeric or use labels such as `"Baseline"`, `"Week1"`, and `"Week4"`. For a factor, time points follow the factor levels. Otherwise, they follow row order, and the package reports that order so it can be checked.
+`C` controls how subjects are combined before an imputed value is computed. `C = 1` pools all subjects, runs fastest, and is the usual starting point. `C = NULL` creates clusters of similar trajectories for each taxon and selects the number of clusters by silhouette width. This can help when subjects have distinct response patterns, but takes considerably longer.
 
-**The model uses the order of the time points, not their numeric values.** Days 0, 7, and 14 are fitted in the same way as 0, 1, and 2, so unequal intervals are not represented in the fitted trajectory. The original values remain available for reports, uncertainty plot axes, and names assigned to newly created sample columns.
+Outlier screening is enabled by default with `use_outliers = TRUE`. It uses functional depth to flag trajectories that sit far from the rest and leaves them out of the fit.
 
-**Abundance type** tells the package whether transformation is needed. With `abundance_type = "raw"`, raw counts or relative abundances are CLR-transformed after zeros are replaced. Use `abundance_type = "clr"` for values that have already been transformed.
+Drawing can be turned off with `plots = FALSE`. Setting `plot_format = "png"` or `plot_format = "both"` also writes one image per page at `dpi`, which defaults to 300. The PDF uses vector graphics, so `dpi` does not affect it.
 
-**`K`** determines how subjects are grouped before an imputed value is calculated. `K = 1` pools all subjects, runs fastest, and is the usual starting point. `K = NULL` creates a cluster of similar trajectories for each taxon and selects the number of clusters by silhouette width; this can help when subjects show distinct response patterns, but it takes considerably longer.
+Time may be numeric or a label such as `"Baseline"`, `"Week1"`, or `"Week4"`. Factor values follow the factor levels. Other values follow metadata row order, and the package reports the order for checking.
 
-See the package vignette for a detailed account of how the method works. It walks through the method figure panel by panel.
+The model uses the order of the time points, not their numeric values. Days 0, 7, and 14 are fitted exactly as 0, 1, and 2. Unequal spacing is not represented in the fitted trajectory. The original values remain in reports, on uncertainty plot axes, and in names for created sample columns.
 
-### What you get back
+## What you get back
 
-`run$completed` retains the original sample names and orders samples first by subject and then by time. Its abundance values are on the CLR scale used by the model:
+`run$completed` contains CLR values and keeps the caller's sample names. Samples are ordered by subject and then by time. Observed values are unchanged. A new column is created only when a subject has no sample at a time point, and `run$metadata` marks that column as imputed.
 
 ```r
 run$completed[, 1:5]
-#>              taxon   S001   S002   S003   S004
-#> 1      Bacteroides  1.130  1.116  1.258  1.155
-#> 2 Faecalibacterium  0.506  0.483  0.471  0.430
-#> 3  Bifidobacterium -0.368 -0.391 -0.461 -0.386
-#> 4      Akkermansia -1.268 -1.208 -1.269 -1.200
-```
+#>              taxon       S001       S002       S003       S004
+#> 1      Bacteroides  1.1300418  1.1158016  1.2583320  1.1553941
+#> 2 Faecalibacterium  0.5057236  0.4826724  0.4713264  0.4301057
+#> 3  Bifidobacterium -0.3679119 -0.3908564 -0.4610505 -0.3858623
+#> 4      Akkermansia -1.2678535 -1.2076176 -1.2686080 -1.1996375
 
-Observed values remain unchanged. A new column is added only when a subject has no sample at a time point. Its name is formed from the subject and time, and `run$metadata` marks it as imputed so it remains distinguishable from a measured sample:
-
-```r
 run$metadata[run$metadata$imputed, ]
 #>      sample subject time time_label imputed
 #> 18 SUB03_14   SUB03   14         14    TRUE
 ```
 
-When `out_dir` is provided, the run writes:
+The `results` directory contains three abundance tables:
 
-| file | contents |
-| --- | --- |
-| `imputed_abundance.tsv` | the completed table |
-| `imputation_log.txt` | the design, time points in order, every missing subject-timepoint and why, and every warning raised |
-| `uncertainty_by_taxon.pdf` | one page per taxon, each imputed value with its 95% interval |
+- `imputed_clr.tsv` contains the completed table on the CLR scale produced by the model.
 
+- `imputed_relative_abundance.tsv` contains proportions that sum to one within each sample.
+
+- `imputed_counts.tsv` contains the completed table on the count scale.
+
+For raw input, collected samples remain unchanged in both the relative-abundance and count output tables, including zeros. Only created samples are reconstructed. Each created sample receives the median library size of the study. A taxon below the value used to replace zero during the CLR step is written as zero.
+
+```r
+read.delim("results/imputed_relative_abundance.tsv")[, 1:5]
+#>              taxon       S001       S002       S003       S004
+#> 1      Bacteroides 0.54050465 0.54038997 0.58333333 0.55766621
+#> 2 Faecalibacterium 0.28950863 0.28690808 0.26553672 0.27001357
+#> 3  Bifidobacterium 0.12084993 0.11977716 0.10451977 0.11940299
+#> 4      Akkermansia 0.04913679 0.05292479 0.04661017 0.05291723
+
+read.delim("results/imputed_counts.tsv")[, 1:5]
+#>              taxon S001 S002 S003 S004
+#> 1      Bacteroides  407  388  413  411
+#> 2 Faecalibacterium  218  206  188  199
+#> 3  Bifidobacterium   91   86   74   88
+#> 4      Akkermansia   37   38   33   39
 ```
+
+These count columns are unchanged from the input because those samples were collected.
+
+For CLR input, the package has no library sizes or structural zeros. Inverting the CLR produces strictly positive proportions, so an original zero appears as a small positive value. Counts use one library size for the whole table, inferred from the rarest taxon. They are on a plausible scale, not the original scale. The log records whether raw or CLR input was used.
+
+`imputation_log.txt` records the design, the ordered time points, each missing subject and time point with its reason, the scales written, and every warning. For this example it includes:
+
+```text
 MISSING (1 of 18 subject-timepoints)
   SUB03  at time 14  [absent_sample]  no sample was collected
 ```
 
-Each uncertainty page shows the evidence behind an imputed value. It includes every subject's trajectory, the fitted trajectory, and the 95% band around the prediction for the subject with the missing sample.
-
-With outlier screening enabled through `use_outliers = TRUE`, which is the default, the page shows two fits. One uses all subjects, while the other excludes flagged trajectories, so their difference shows how outlier screening affected the imputed value. With outlier screening disabled, the page shows one fit and uses no outlier screening terminology.
-
-Each page covers one taxon and displays that taxon's imputed values side by side as facets. If a taxon has more than six imputed values, they continue on additional pages so none are omitted. Before producing a large number of pages, the package reports how many it will draw.
-
-`mc_uncertainty(run, taxon)` returns the same intervals in a table. Set `plots = FALSE` to disable drawing. For raster output, `plot_format = "png"` or `"both"` writes one image per page at `dpi`, which defaults to 300; the PDF uses vector graphics and remains sharp at any size, so `dpi` does not affect it.
-
-All written information is also returned in `run$design` and `run$missing`, so no result is available only on screen. To inspect a design without fitting the model, use `mc_from_metadata()` for conversion and reporting alone.
-
-The bundled example is also available through `mc_demo_data()`.
+The information printed to the screen is also available in `run$design` and `run$missing`.
 
 ## With SummarizedExperiment
 
-`mc_run()` is a generic with methods for `SummarizedExperiment` and `TreeSummarizedExperiment`. Subject and time are read from `colData`:
-
-```r
-library(SummarizedExperiment)
-
-se  <- mc_as_demo_se()
-out <- mc_run(se, subject_col = "subject", time_col = "timepoint", K = 1)
-
-assayNames(out)
-#> [1] "clr"     "imputed"
-
-metadata(out)$mc_run$missing
-```
-
-The input assay remains unchanged. The completed matrix is added as a new assay, keeping observed and imputed values separate. Subject names may contain dots or spaces, and time points do not need to be integers or evenly spaced.
-
-## Two entry points
-
-| Input | Function | Result |
-| --- | --- | --- |
-| Data with missing samples | `mc_run()` | Completed table. `true_value` is `NA`, since the values were never observed |
-| Data for benchmarking | `mc_prepare()` and `mc_fit()` | Values masked on purpose, scored against the truth with `mc_metrics()` |
-
-`mc_metrics()` is not meaningful for a fit from `mc_run()` because a missing value has no observed value for comparison.
+`mc_run()` has methods for `SummarizedExperiment` and `TreeSummarizedExperiment`. Subject and time are read from `colData`, and the completed matrix is added as a new assay.
 
 ## Uncertainty
 
-`mc_ci()` returns analytic intervals based on the FPCA score covariance or returns bootstrap intervals. `mc_plot()` draws a trajectory and its interval:
+`uncertainty_by_taxon.pdf` shows every subject's trajectory, the fitted trajectory, and the 95% band for the subject with the missing sample.
 
-```r
-data(taxa_demo)
+Each page covers one taxon. That taxon's imputed values appear side by side as facets. Past six imputed values they continue onto further pages, so none are dropped. Before drawing a large number of pages, the package says how many it will draw.
 
-prep <- mc_prepare(taxa_demo, "OTU_ID",
-                    mask_list = data.frame(rep = "S01", time = 3))
-fit  <- mc_fit(prep, K = 1)
+With outlier screening on, a page shows two fits: one using all subjects and one excluding the flagged trajectories. The difference between them shows what outlier screening did to the imputed value. With screening off, the page shows one fit.
 
-mc_plot(fit, species_name = "Taxon01", rep_id = "S01",
-         time_id = 3, ci_method = "analytic")
-```
+The intervals are also available as a table from `mc_uncertainty(run, taxon)`.
 
 ## Documentation
+
+Read the workflow vignette for the method, output details, and uncertainty options:
 
 ```r
 vignette("MicrobiomeCurves-workflow", package = "MicrobiomeCurves")
 ```
 
-For a reading copy outside R, `Rscript tools/render-docs.R` writes the same document to the package root in HTML and PDF formats.
+`mc_demo_data()` returns the bundled example. `mc_from_metadata()` reports the study design without fitting the model.
 
 ## Citation
 

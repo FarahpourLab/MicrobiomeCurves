@@ -367,7 +367,7 @@ mc_report_failures <- function(pred, say) {
 #' @param taxon_col Character name of the taxon column.
 #' @param parse_fun Column name parser.
 #' @param info List returned by [mc_detect_missing()].
-#' @param K Integer or `NULL`. Number of clusters.
+#' @param C Integer or `NULL`. Number of clusters.
 #' @param cluster_method Character clustering method.
 #' @param use_outliers Logical. Whether to screen outlying curves.
 #' @param seed Integer random seed.
@@ -379,7 +379,7 @@ mc_report_failures <- function(pred, say) {
 #' @keywords internal
 #' @noRd
 mc_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
-                             K, cluster_method, use_outliers, seed,
+                             C, cluster_method, use_outliers, seed,
                              say) {
     prep <- mc_prepare(
         dat = dat_full,
@@ -392,7 +392,7 @@ mc_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
 
     fit <- mc_fit(
         prep = prep,
-        K = K,
+        C = C,
         cluster_method = cluster_method,
         use_outliers = use_outliers,
         seed = seed

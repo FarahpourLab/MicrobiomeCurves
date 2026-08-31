@@ -1,5 +1,5 @@
 test_that("mc_run fills every missing cell and reports what it did", {
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
     expect_s3_class(run, "mc_run")
     expect_equal(nrow(run$missing), 3)
@@ -10,7 +10,7 @@ test_that("mc_run fills every missing cell and reports what it did", {
 
 test_that("observed values are never overwritten", {
     # Imputation must not modify measured values.
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
     observed_cols <- setdiff(names(taxa_demo), c("OTU_ID", "S02.1", "S07.4"))
 
@@ -24,7 +24,7 @@ test_that("observed values are never overwritten", {
 })
 
 test_that("the completed table keeps the input layout", {
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
     # Same rows; every observed sample comes back under its own name, and
     # the absent one is added under a name built from its subject and time.
@@ -36,7 +36,7 @@ test_that("the completed table keeps the input layout", {
 })
 
 test_that("previously missing cells come back populated", {
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
     for (cl in c("S02.1", "S07.4", "S04_2")) {
         expect_false(anyNA(run$completed[[cl]]), info = paste("column", cl))
@@ -62,13 +62,13 @@ test_that("mc_run refuses a subject with too few observations", {
     dat[["S1.3"]] <- NA_real_
 
     expect_error(
-        run_wide_as_meta(dat, K = 1, min_observed = 4, verbose = FALSE),
+        run_wide_as_meta(dat, C = 1, min_observed = 4, verbose = FALSE),
         "fewer than 4 observed time points"
     )
 
     # The error names the subjects and their counts, so it can be acted on.
     msg <- tryCatch(
-        run_wide_as_meta(dat, K = 1, min_observed = 4, verbose = FALSE),
+        run_wide_as_meta(dat, C = 1, min_observed = 4, verbose = FALSE),
         error = function(e) conditionMessage(e)
     )
     expect_match(msg, "S1", fixed = TRUE)
@@ -106,7 +106,7 @@ test_that("fitting survives a subject with too few observations", {
 
     for (uo in c(TRUE, FALSE)) {
         fit <- expect_no_error(
-            suppressWarnings(mc_fit(prep, K = 1, use_outliers = uo))
+            suppressWarnings(mc_fit(prep, C = 1, use_outliers = uo))
         )
         got <- mc_impute(fit)
         expect_equal(nrow(got), nrow(dat) * 2)
@@ -126,7 +126,7 @@ test_that("mc_run refuses a subject that lost its whole trajectory", {
     }
 
     expect_error(
-        run_wide_as_meta(dat, K = 1, verbose = FALSE),
+        run_wide_as_meta(dat, C = 1, verbose = FALSE),
         "fewer than 2 observed time points"
     )
 })
@@ -152,7 +152,7 @@ test_that("a subject with no observations falls back to the population mean", {
         KEEP.OUT.ATTRS = FALSE, stringsAsFactors = FALSE
     )
     prep <- mc_prepare(dat, "OTU_ID", mask_list = mask)
-    imp <- mc_impute(quiet_fit(prep, K = 1))
+    imp <- mc_impute(quiet_fit(prep, C = 1))
 
     for (taxon in c("T1", "T2")) {
         for (tt in 0:3) {
@@ -169,7 +169,7 @@ test_that("a subject with no observations falls back to the population mean", {
 test_that("mc_run adds no logic of its own", {
     # The wrapper must return the same result as calling the three underlying
     # functions directly.
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1, seed = 42)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1, seed = 42)
 
     dat_full <- taxa_demo
     dat_full[["S04.2"]] <- NA_real_
@@ -179,7 +179,7 @@ test_that("mc_run adds no logic of its own", {
         taxon_col = "OTU_ID",
         mask_list = run$missing[, c("subject", "time")]
     )
-    manual <- mc_impute(quiet_fit(prep, K = 1, seed = 42))
+    manual <- mc_impute(quiet_fit(prep, C = 1, seed = 42))
 
     expect_equal(run$imputed$imputed_value, manual$imputed_value)
     expect_equal(run$imputed$species, manual$species)
@@ -188,7 +188,7 @@ test_that("mc_run adds no logic of its own", {
 })
 
 test_that("print.mc_run returns its input invisibly", {
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
     expect_output(print(run), "MicrobiomeCurves run")
     expect_output(print(run), "cells imputed")

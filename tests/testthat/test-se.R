@@ -18,7 +18,7 @@ test_that("imputing a SummarizedExperiment adds an assay, not replaces one", {
     se <- mc_as_demo_se()
     out <- suppressWarnings(
         mc_run(se, subject_col = "subject", time_col = "timepoint",
-            K = 1, verbose = FALSE)
+            C = 1, verbose = FALSE)
     )
 
     expect_equal(SummarizedExperiment::assayNames(out), c("clr", "imputed"))
@@ -38,13 +38,13 @@ test_that("the container route agrees with the table route", {
     se <- mc_as_demo_se()
     out <- suppressWarnings(
         mc_run(se, subject_col = "subject", time_col = "timepoint",
-            K = 1, seed = 123, verbose = FALSE)
+            C = 1, seed = 123, verbose = FALSE)
     )
     imp <- SummarizedExperiment::assay(out, "imputed")
 
     tab <- mc_demo_table()
     run <- suppressWarnings(
-        run_wide_as_meta(tab, K = 1, seed = 123, verbose = FALSE)
+        run_wide_as_meta(tab, C = 1, seed = 123, verbose = FALSE)
     )
 
     # The two routes name their columns differently, so align them on the

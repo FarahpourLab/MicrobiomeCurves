@@ -6,7 +6,7 @@
 \usage{
 mc_fit(
   prep,
-  K = NULL,
+  C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
   seed = 123
@@ -16,8 +16,8 @@ mc_fit(
 \item{prep}{A list returned by \code{\link{mc_prepare}} containing
 parsed data, replicate-time mapping, and masking information.}
 
-\item{K}{Integer. Number of clusters for grouping subject trajectories.
-If \code{K = 1}, no clustering is performed and a single FPCA model is
+\item{C}{Integer. Number of clusters for grouping subject trajectories.
+If \code{C = 1}, no clustering is performed and a single FPCA model is
 used.}
 
 \item{cluster_method}{Character. How subjects are grouped once the taxon
@@ -54,7 +54,7 @@ An object of class \code{"mc_fit"} containing:
 \item \code{times}: Time points
 \item \code{clusters}: List of cluster assignments for each taxon
 \item \code{pred_long}: Data frame with true vs imputed values and errors
-\item \code{K}: Number of clusters used
+\item \code{C}: Number of clusters used
 \item \code{seed}: Random seed used
 }
 }
@@ -88,9 +88,9 @@ prep <- mc_prepare(
     mask_list = data.frame(rep = "S01", time = 3)
 )
 
-# K = 1 pools all subjects. K = NULL picks K per taxon by silhouette
+# C = 1 pools all subjects. C = NULL picks C per taxon by silhouette
 # width, which is slower.
-fit <- suppressWarnings(mc_fit(prep, K = 1))
+fit <- suppressWarnings(mc_fit(prep, C = 1))
 
 class(fit)
 head(fit$pred_long[, c("species", "rep", "time", "imputed_value")])

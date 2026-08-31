@@ -19,7 +19,7 @@
 #' @param pseudocount Zero replacement used when transforming raw values.
 #' @param out_dir Directory to write the log and completed table into, or
 #'   `NULL` to write nothing.
-#' @param K,cluster_method,use_outliers,seed Passed to the fit.
+#' @param C,cluster_method,use_outliers,seed Passed to the fit.
 #' @param min_observed Integer. Subjects with fewer observed time points
 #'   stop the run.
 #' @param verbose Logical. Whether to report progress.
@@ -32,7 +32,7 @@
 mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
                                   time_col, abundance_type, pseudocount,
                                   out_dir, plots, dpi, plot_format,
-                                  K, cluster_method, use_outliers,
+                                  C, cluster_method, use_outliers,
                                   seed, min_observed, verbose) {
     mc_check_meta_args(sample_col, subject_col, time_col)
     mc_check_dpi(dpi)
@@ -52,7 +52,7 @@ mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
             fitted <- mc_run_wide(
                 design$table,
                 taxon_col = design$taxon_col,
-                K = K, cluster_method = cluster_method,
+                C = C, cluster_method = cluster_method,
                 use_outliers = use_outliers, seed = seed,
                 min_observed = min_observed, verbose = verbose,
                 subject_label = function(codes) {
@@ -68,13 +68,58 @@ mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
         }
     )
 
-    warned <- seen$warned
+    run <- mc_attach_scale_info(run, dat, abundance_type)
+    mc_finish_run(
+        run, seen$warned, out_dir, plots, dpi, plot_format, verbose
+    )
+}
+
+#' Record what scale the caller supplied
+#'
+#' @description
+#' The relative abundance and count tables depend on what came in, so it is
+#' recorded here while it is still known. Only raw input carries library
+#' sizes and structural zeros.
+#'
+#' @param run The run so far.
+#' @param abundance The abundance table as supplied.
+#' @param abundance_type Either `"raw"` or `"clr"`.
+#'
+#' @return `run`, with `abundance_type` and `scale_info` attached.
+#'
+#' @keywords internal
+#' @noRd
+mc_attach_scale_info <- function(run, abundance, abundance_type) {
+    run$abundance_type <- abundance_type
+    run$scale_info <- if (identical(abundance_type, "raw")) {
+        mc_raw_scale_info(abundance, run$design)
+    } else {
+        list(depths = NULL, pseudocount = NULL)
+    }
+    run
+}
+
+#' Replay the collected warnings and write the run out
+#'
+#' @param run The finished run.
+#' @param warned Character vector of warnings raised during the run.
+#' @param out_dir Directory to write to, or `NULL`.
+#' @param plots,dpi,plot_format,verbose As in [mc_run()].
+#'
+#' @return `run`, with `warnings` attached, and `files` if anything was
+#'   written.
+#'
+#' @keywords internal
+#' @noRd
+mc_finish_run <- function(run, warned, out_dir, plots, dpi, plot_format,
+                          verbose) {
     run$warnings <- warned
     mc_replay_warnings(warned)
 
     if (!is.null(out_dir)) {
-        run <- mc_emit_output(run, out_dir, warned, plots, dpi,
-                               plot_format, verbose)
+        run <- mc_emit_output(
+            run, out_dir, warned, plots, dpi, plot_format, verbose
+        )
     }
     run
 }

@@ -36,7 +36,7 @@
 #'     mask_list = data.frame(rep = "S01", time = 3)
 #' )
 #'
-#' fit <- suppressWarnings(mc_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, C = 1))
 #'
 #' imputed <- mc_impute(fit)
 #'

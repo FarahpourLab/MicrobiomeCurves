@@ -21,7 +21,7 @@ mc_run(dat, ...)
   plots = TRUE,
   dpi = 300,
   plot_format = c("pdf", "png", "both"),
-  K = NULL,
+  C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
   seed = 123,
@@ -42,7 +42,7 @@ mc_run(dat, ...)
   plots = TRUE,
   dpi = 300,
   plot_format = c("pdf", "png", "both"),
-  K = NULL,
+  C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
   seed = 123,
@@ -64,7 +64,7 @@ mc_run(dat, ...)
 \item{dat}{A \code{SummarizedExperiment} or \code{TreeSummarizedExperiment}.}
 
 \item{...}{Further arguments passed to the \code{data.frame} method of
-\code{\link[=mc_run]{mc_run()}}, such as \code{K}, \code{use_outliers}, \code{seed} and \code{verbose}.}
+\code{\link[=mc_run]{mc_run()}}, such as \code{C}, \code{use_outliers}, \code{seed} and \code{verbose}.}
 
 \item{metadata}{A data.frame with one row per sample, saying which subject
 each sample came from and when.}
@@ -109,8 +109,8 @@ own page of \code{uncertainty_by_taxon.pdf}), \code{"png"} (one file
 per taxon under \code{uncertainty_png/}, at \code{dpi}), or
 \code{"both"}.}
 
-\item{K}{Integer or \code{NULL}. Number of trajectory clusters, passed
-straight to \code{\link{mc_fit}}. \code{NULL} selects K per taxon by mean
+\item{C}{Integer or \code{NULL}. Number of trajectory clusters, passed
+straight to \code{\link{mc_fit}}. \code{NULL} selects C per taxon by mean
 silhouette width.}
 
 \item{cluster_method}{Character, passed to \code{\link{mc_fit}}.}
@@ -215,7 +215,7 @@ head(demo$metadata, 3)
 run <- suppressWarnings(mc_run(
     demo$counts, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
-    K = 1, verbose = FALSE
+    C = 1, verbose = FALSE
 ))
 
 # what was missing, and why
@@ -232,7 +232,7 @@ out <- file.path(tempdir(), "imputation")
 run2 <- suppressWarnings(mc_run(
     demo$counts, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
-    out_dir = out, K = 1, verbose = FALSE
+    out_dir = out, C = 1, verbose = FALSE
 ))
 basename(run2$files)
 
@@ -245,7 +245,7 @@ se
 
 out <- suppressWarnings(
     mc_run(se, subject_col = "subject", time_col = "timepoint",
-        K = 1, verbose = FALSE)
+        C = 1, verbose = FALSE)
 )
 
 assayNames(out)

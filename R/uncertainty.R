@@ -119,7 +119,7 @@ mc_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
 #' run <- suppressWarnings(mc_run(
 #'     demo$counts, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
-#'     K = 1, verbose = FALSE
+#'     C = 1, verbose = FALSE
 #' ))
 #'
 #' mc_uncertainty(run, rownames(demo$counts)[1])

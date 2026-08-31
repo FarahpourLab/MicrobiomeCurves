@@ -19,23 +19,23 @@ mc_check_prep <- function(prep) {
 #' Choose the number of clusters for one taxon
 #'
 #' @description
-#' Returns `K` when the caller fixed it, and otherwise selects it by mean
+#' Returns `C` when the caller fixed it, and otherwise selects it by mean
 #' silhouette width.
 #'
 #' @param scores Numeric matrix of FPCA scores, one row per subject.
 #' @param taxon_name Character name of the taxon, used in the plot title.
-#' @param K Integer or `NULL`. Fixed number of clusters, or `NULL` to select.
+#' @param C Integer or `NULL`. Fixed number of clusters, or `NULL` to select.
 #' @param seed Integer random seed.
 #'
 #' @return Integer number of clusters.
 #'
 #' @keywords internal
 #' @noRd
-mc_choose_k <- function(scores, taxon_name, K, seed) {
-    if (is.null(K)) {
-        select_K_silhouette_plot(scores, taxon_name, seed = seed, plot = FALSE)
+mc_choose_c <- function(scores, taxon_name, C, seed) {
+    if (is.null(C)) {
+        select_C_silhouette_plot(scores, taxon_name, seed = seed, plot = FALSE)
     } else {
-        K
+        C
     }
 }
 
@@ -93,7 +93,7 @@ mc_taxon_outliers <- function(Ly, Lt, use_outliers) {
 #' @param Ly,Lt Named lists of observed values and times, one entry per
 #'   subject.
 #' @param outliers Named logical vector marking outlying subjects.
-#' @param K Integer or `NULL`, passed to [mc_choose_k()].
+#' @param C Integer or `NULL`, passed to [mc_choose_c()].
 #' @param taxon_name Character name of the taxon.
 #' @param seed Integer random seed.
 #'
@@ -103,7 +103,7 @@ mc_taxon_outliers <- function(Ly, Lt, use_outliers) {
 #'
 #' @keywords internal
 #' @noRd
-mc_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
+mc_taxon_clusters <- function(Ly, Lt, outliers, C, taxon_name, seed,
                                cluster_method = "fpca") {
     Ly_use <- Ly[!outliers]
     Lt_use <- Lt[!outliers]
@@ -125,14 +125,14 @@ mc_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
     }
 
     scores <- as.matrix(scale(fp_clust$xiEst))
-    K_use <- mc_choose_k(scores, taxon_name, K, seed)
+    C_use <- mc_choose_c(scores, taxon_name, C, seed)
 
-    if (K_use <= 1 || nrow(scores) < 2) {
+    if (C_use <= 1 || nrow(scores) < 2) {
         return(single_cluster())
     }
 
     mc_assign_clusters(
-        fp_clust, scores, K_use, names(Ly_use), cluster_method
+        fp_clust, scores, C_use, names(Ly_use), cluster_method
     )
 }
 
@@ -141,7 +141,7 @@ mc_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
 #' @param Ly_tmp,Lt_tmp Named lists of values and times for the subjects still
 #'   in play.
 #' @param r_k Character identifier of the target subject.
-#' @param K Integer or `NULL`, passed to [mc_choose_k()].
+#' @param C Integer or `NULL`, passed to [mc_choose_c()].
 #' @param taxon_name Character name of the taxon.
 #' @param seed Integer random seed.
 #'
@@ -151,7 +151,7 @@ mc_taxon_clusters <- function(Ly, Lt, outliers, K, taxon_name, seed,
 #'
 #' @keywords internal
 #' @noRd
-mc_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
+mc_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, C, taxon_name, seed,
                                    cluster_method = "fpca") {
     fp_tmp <- mc_safe_fpca(Ly_tmp, Lt_tmp)
     if (is.null(fp_tmp) || is.null(fp_tmp$xiEst)) {
@@ -159,14 +159,14 @@ mc_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
     }
 
     scores <- as.matrix(scale(fp_tmp$xiEst))
-    K_use <- mc_choose_k(scores, taxon_name, K, seed)
+    C_use <- mc_choose_c(scores, taxon_name, C, seed)
 
-    if (K_use <= 1 || nrow(scores) < 2) {
+    if (C_use <= 1 || nrow(scores) < 2) {
         return(names(Ly_tmp))
     }
 
     clusters_tmp <- mc_assign_clusters(
-        fp_tmp, scores, K_use, names(Ly_tmp), cluster_method
+        fp_tmp, scores, C_use, names(Ly_tmp), cluster_method
     )
 
     members <- if (!(r_k %in% names(clusters_tmp))) {
@@ -195,7 +195,7 @@ mc_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
 #'   subject.
 #' @param outliers Named logical vector marking outlying subjects.
 #' @param r_k Character identifier of the target subject.
-#' @param K Integer or `NULL`, passed to [mc_choose_k()].
+#' @param C Integer or `NULL`, passed to [mc_choose_c()].
 #' @param taxon_name Character name of the taxon.
 #' @param seed Integer random seed.
 #'
@@ -205,7 +205,7 @@ mc_members_of_cluster <- function(Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed,
 #'
 #' @keywords internal
 #' @noRd
-mc_cell_members <- function(Ly, Lt, outliers, r_k, K, taxon_name, seed,
+mc_cell_members <- function(Ly, Lt, outliers, r_k, C, taxon_name, seed,
                              cluster_method = "fpca") {
     keep_idx <- if (outliers[r_k]) {
         (!outliers) | (names(Ly) == r_k)
@@ -230,7 +230,7 @@ mc_cell_members <- function(Ly, Lt, outliers, r_k, K, taxon_name, seed,
     }
 
     out(mc_members_of_cluster(
-        Ly_tmp, Lt_tmp, r_k, K, taxon_name, seed, cluster_method
+        Ly_tmp, Lt_tmp, r_k, C, taxon_name, seed, cluster_method
     ))
 }
 
@@ -277,7 +277,7 @@ mc_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
 #' @param rows Integer row indices of `pred_long` belonging to this taxon.
 #' @param pred_long Table of cells to impute.
 #' @param use_outliers Logical. Whether to screen outlying trajectories.
-#' @param K Integer or `NULL`. Number of clusters.
+#' @param C Integer or `NULL`. Number of clusters.
 #' @param taxon_name Character name of the taxon.
 #' @param seed Integer random seed.
 #'
@@ -287,14 +287,14 @@ mc_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
 #' @keywords internal
 #' @noRd
 mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
-                          K, taxon_name, seed, cluster_method = "fpca") {
+                          C, taxon_name, seed, cluster_method = "fpca") {
     traj <- mc_taxon_trajectories(df_sp, reps)
     Ly <- traj$Ly
     Lt <- traj$Lt
 
     outliers <- mc_taxon_outliers(Ly, Lt, use_outliers)
     clusters <- mc_taxon_clusters(
-        Ly, Lt, outliers, K, taxon_name, seed, cluster_method
+        Ly, Lt, outliers, C, taxon_name, seed, cluster_method
     )
 
     imputed <- rep(NA_real_, length(rows))
@@ -306,7 +306,7 @@ mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
         tt <- pred_long$time[k]
 
         sel <- mc_cell_members(
-            Ly, Lt, outliers, r_k, K, taxon_name, seed, cluster_method
+            Ly, Lt, outliers, r_k, C, taxon_name, seed, cluster_method
         )
         ci_obj <- mc_impute_cell(Ly, Lt, sel, r_k, tt)
 
@@ -331,7 +331,7 @@ mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
 #' @param reps Character vector of subject identifiers.
 #' @param pred_long Table of cells to impute.
 #' @param use_outliers Logical. Whether to screen outlying curves.
-#' @param K Integer or `NULL`. Number of clusters.
+#' @param C Integer or `NULL`. Number of clusters.
 #' @param seed Integer random seed.
 #'
 #' @return List with the filled `pred_long`, and `clusters` and `outliers`,
@@ -340,7 +340,7 @@ mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
 #' @keywords internal
 #' @noRd
 mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
-                             pred_long, use_outliers, K, seed,
+                             pred_long, use_outliers, C, seed,
                              cluster_method = "fpca") {
     n_taxa <- length(species_vec)
     clusters_by_taxon <- vector("list", length = n_taxa)
@@ -354,7 +354,7 @@ mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
         rows <- which(pred_long$taxon_idx == i)
 
         res <- mc_fit_taxon(
-            df_sp, reps, rows, pred_long, use_outliers, K, sp_name, seed,
+            df_sp, reps, rows, pred_long, use_outliers, C, sp_name, seed,
             cluster_method
         )
 

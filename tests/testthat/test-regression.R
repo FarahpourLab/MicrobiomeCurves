@@ -22,7 +22,7 @@ test_that("imputed values for a fixed mask and seed have not changed", {
         -1.051379898447, -0.508832336939, -0.552737382916, -0.922789097269
     )
 
-    fit <- quiet_fit(demo_prep(), K = 1, use_outliers = TRUE, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, use_outliers = TRUE, seed = 123)
     got <- mc_impute(fit)
 
     expect_equal(got$species, sprintf("Taxon%02d", 1:12))
@@ -30,14 +30,14 @@ test_that("imputed values for a fixed mask and seed have not changed", {
 })
 
 test_that("the true values recovered at the masked cell are the input values", {
-    fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
     got <- mc_impute(fit)
 
     expect_equal(got$true_value, taxa_demo[["S01.3"]], tolerance = 1e-12)
 })
 
 test_that("squared error is consistent with true and imputed values", {
-    fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
     got <- mc_impute(fit)
 
     expect_equal(
@@ -46,7 +46,7 @@ test_that("squared error is consistent with true and imputed values", {
 })
 
 test_that("mc_metrics agrees with the long table it summarises", {
-    fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
     got <- mc_impute(fit)
     m <- mc_metrics(fit)
 
@@ -55,7 +55,7 @@ test_that("mc_metrics agrees with the long table it summarises", {
 })
 
 test_that("mc_run output for the bundled data has not changed", {
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1, seed = 123)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1, seed = 123)
 
     expect_equal(
         head(run$imputed$imputed_value, 6),
@@ -70,8 +70,8 @@ test_that("mc_run output for the bundled data has not changed", {
 })
 
 test_that("results are reproducible across repeated runs", {
-    a <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1, seed = 7)
-    b <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1, seed = 7)
+    a <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1, seed = 7)
+    b <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1, seed = 7)
 
     expect_identical(a$imputed$imputed_value, b$imputed$imputed_value)
 })
@@ -79,7 +79,7 @@ test_that("results are reproducible across repeated runs", {
 test_that("true values are NA when nothing was observed to compare against", {
     # mc_run() imputes data that was never observed, so there is no ground
     # truth and mc_metrics() does not give a meaningful score.
-    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", K = 1)
+    run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
     expect_true(all(is.na(run$imputed$true_value)))
     expect_true(all(is.na(run$imputed$se)))

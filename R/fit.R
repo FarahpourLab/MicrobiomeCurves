@@ -62,7 +62,7 @@ detect_outliers_depth <- function(Ly, Lt, alpha = 0.05) {
 #'
 #' @param scores Numeric matrix of clustering features.
 #' @param taxon_name Character taxon name used in the plot title.
-#' @param max_K Maximum number of clusters to evaluate.
+#' @param max_C Maximum number of clusters to evaluate.
 #' @param seed Random seed.
 #' @param plot Logical. If TRUE, a silhouette diagnostic plot is attached to
 #'   the result as the \code{"silhouette_plot"} attribute. It is attached
@@ -72,8 +72,8 @@ detect_outliers_depth <- function(Ly, Lt, alpha = 0.05) {
 #'   \code{"silhouette_plot"} attribute.
 #' @keywords internal
 #' @noRd
-select_K_silhouette_plot <- function(
-    scores, taxon_name, max_K = 8, seed = 123, plot = TRUE) {
+select_C_silhouette_plot <- function(
+    scores, taxon_name, max_C = 8, seed = 123, plot = TRUE) {
     if (!requireNamespace("cluster", quietly = TRUE)) {
         stop("Package 'cluster' required")
     }
@@ -81,14 +81,14 @@ select_K_silhouette_plot <- function(
     n <- nrow(scores)
     if (n < 3) return(1)
 
-    max_K <- min(max_K, n - 1)
-    if (max_K < 2) return(1)
+    max_C <- min(max_C, n - 1)
+    if (max_C < 2) return(1)
 
-    sil_scores <- rep(NA_real_, max_K)
+    sil_scores <- rep(NA_real_, max_C)
 
     dmat <- stats::dist(scores)
 
-    for (k in seq(2, max_K)) {
+    for (k in seq(2, max_C)) {
         mc_reset_rng(seed)
         km <- stats::kmeans(scores, centers = k, nstart = 10)
         sil <- cluster::silhouette(km$cluster, dmat)
@@ -101,7 +101,7 @@ select_K_silhouette_plot <- function(
     K_opt <- which.max(sil_scores)
 
     if (plot) {
-        df <- data.frame(k = seq_len(max_K), silhouette = sil_scores)
+        df <- data.frame(k = seq_len(max_C), silhouette = sil_scores)
 
         p <- ggplot2::ggplot(df, ggplot2::aes(x = k, y = silhouette)) +
             ggplot2::geom_line(na.rm = TRUE) +
@@ -149,8 +149,8 @@ NULL
 #'
 #' @param prep A list returned by \code{\link{mc_prepare}} containing
 #'   parsed data, replicate-time mapping, and masking information.
-#' @param K Integer. Number of clusters for grouping subject trajectories.
-#'   If \code{K = 1}, no clustering is performed and a single FPCA model is
+#' @param C Integer. Number of clusters for grouping subject trajectories.
+#'   If \code{C = 1}, no clustering is performed and a single FPCA model is
 #'   used.
 #' @param cluster_method Character. How subjects are grouped once the taxon
 #'   has been fitted. Both routes start from the same FPCA fit.
@@ -184,7 +184,7 @@ NULL
 #'   \item \code{times}: Time points
 #'   \item \code{clusters}: List of cluster assignments for each taxon
 #'   \item \code{pred_long}: Data frame with true vs imputed values and errors
-#'   \item \code{K}: Number of clusters used
+#'   \item \code{C}: Number of clusters used
 #'   \item \code{seed}: Random seed used
 #' }
 #'
@@ -197,9 +197,9 @@ NULL
 #'     mask_list = data.frame(rep = "S01", time = 3)
 #' )
 #'
-#' # K = 1 pools all subjects. K = NULL picks K per taxon by silhouette
+#' # C = 1 pools all subjects. C = NULL picks C per taxon by silhouette
 #' # width, which is slower.
-#' fit <- suppressWarnings(mc_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, C = 1))
 #'
 #' class(fit)
 #' head(fit$pred_long[, c("species", "rep", "time", "imputed_value")])
@@ -210,7 +210,7 @@ NULL
 #' \code{\link{mc_run}}
 #'
 #' @export
-mc_fit <- function(prep, K = NULL,
+mc_fit <- function(prep, C = NULL,
                     cluster_method = c("fpca", "kmeans_fd"),
                     use_outliers = TRUE, seed = 123) {
     # Reproducible for a given seed, but the caller's own random stream is
@@ -241,7 +241,7 @@ mc_fit <- function(prep, K = NULL,
 
     ft <- mc_fit_all_taxa(
         long, taxon_col, species_vec, reps, pred_long,
-        use_outliers, K, seed, cluster_method
+        use_outliers, C, seed, cluster_method
     )
     pred_long <- dplyr::mutate(
         ft$pred_long, se = (true_value - imputed_value)^2
@@ -251,7 +251,7 @@ mc_fit <- function(prep, K = NULL,
     mc_warn_unimputed(pred_long)
 
     mc_fit_result(
-        dat, dat_orig, prep, ft, pred_long, K, cluster_method,
+        dat, dat_orig, prep, ft, pred_long, C, cluster_method,
         use_outliers, seed
     )
 }
@@ -263,7 +263,7 @@ mc_fit <- function(prep, K = NULL,
 #' @param prep The object from [mc_prepare()].
 #' @param ft List returned by `mc_fit_all_taxa()`.
 #' @param pred_long Prediction table carrying the squared errors.
-#' @param K Integer or `NULL`, the requested number of clusters.
+#' @param C Integer or `NULL`, the requested number of clusters.
 #' @param cluster_method Character, the clustering route that was used.
 #' @param use_outliers Logical, whether trajectories were screened.
 #' @param seed Integer random seed.
@@ -272,7 +272,7 @@ mc_fit <- function(prep, K = NULL,
 #'
 #' @keywords internal
 #' @noRd
-mc_fit_result <- function(dat, dat_orig, prep, ft, pred_long, K,
+mc_fit_result <- function(dat, dat_orig, prep, ft, pred_long, C,
                            cluster_method, use_outliers, seed) {
     structure(
         c(
@@ -280,7 +280,7 @@ mc_fit_result <- function(dat, dat_orig, prep, ft, pred_long, K,
             prep[c("taxon_col", "col_map", "reps", "times")],
             list(
                 clusters = ft$clusters, pred_long = pred_long,
-                K = K, cluster_method = cluster_method,
+                C = C, cluster_method = cluster_method,
                 outliers = ft$outliers, use_outliers = use_outliers,
                 seed = seed
             )

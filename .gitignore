@@ -10,3 +10,9 @@ vignettes/*.log
 vignettes/*.tex
 MicrobiomeCurves-workflow.html
 MicrobiomeCurves-workflow.pdf
+/doc/
+/Meta/
+
+# Auto-generated debugging extracts. They call a helper that does not
+# exist, and they are not run by the test suite.
+tests/testthat/_problems/

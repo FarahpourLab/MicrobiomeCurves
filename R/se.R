@@ -76,7 +76,7 @@ mc_encode_samples <- function(subject, time) {
 #' @param name Character. Name of the assay to write the completed matrix into.
 #'   Defaults to `"imputed"`.
 #' @param ... Further arguments passed to the `data.frame` method of
-#'   [mc_run()], such as `K`, `use_outliers`, `seed` and `verbose`.
+#'   [mc_run()], such as `C`, `use_outliers`, `seed` and `verbose`.
 #'
 #' @return The input object with an additional assay named by `name`, holding
 #'   the completed matrix, and with `metadata(x)$mc_run` set to a list
@@ -93,7 +93,7 @@ mc_encode_samples <- function(subject, time) {
 #'
 #' out <- suppressWarnings(
 #'     mc_run(se, subject_col = "subject", time_col = "timepoint",
-#'         K = 1, verbose = FALSE)
+#'         C = 1, verbose = FALSE)
 #' )
 #'
 #' assayNames(out)

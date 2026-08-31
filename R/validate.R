@@ -410,3 +410,44 @@ mc_check_mask_coverage <- function(mask_pairs, col_map) {
     }
     invisible(NULL)
 }
+
+#' Refuse arguments the method does not use
+#'
+#' @description
+#' The table methods take `...` so the generic can dispatch, but they do not
+#' forward it. Anything extra would be dropped in silence, which is how a
+#' misspelled argument, or one renamed in a later version, turns into a run
+#' that quietly did something else.
+#'
+#' `K` is named explicitly because it was the argument for the number of
+#' clusters and is now `C`. Silently ignoring it would leave a caller with
+#' clustering they did not ask for.
+#'
+#' @param ... The unused arguments, as received by the method.
+#'
+#' @return `NULL`, invisibly, when nothing was passed.
+#'
+#' @keywords internal
+#' @noRd
+mc_check_dots <- function(...) {
+    extra <- names(list(...))
+    if (length(extra) == 0) {
+        return(invisible(NULL))
+    }
+    extra[!nzchar(extra)] <- "<unnamed>"
+
+    if ("K" %in% extra) {
+        stop(
+            "`K` is now `C`, the number of clusters. Passing `K` would ",
+            "have been ignored, and the run would have chosen the number ",
+            "of clusters itself instead of using the value you gave. ",
+            "Rename it to `C`.",
+            call. = FALSE
+        )
+    }
+    stop(
+        "Unused argument(s): ", paste(extra, collapse = ", "),
+        ". Check the spelling against ?mc_run.",
+        call. = FALSE
+    )
+}

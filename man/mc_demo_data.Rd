@@ -27,7 +27,7 @@ head(demo$metadata)
 run <- suppressWarnings(mc_run(
     demo$counts, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
-    K = 1, verbose = FALSE
+    C = 1, verbose = FALSE
 ))
 run$missing
 

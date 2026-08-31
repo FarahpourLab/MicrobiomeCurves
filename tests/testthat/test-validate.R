@@ -119,7 +119,7 @@ test_that("the documented mask_list forms both work", {
 test_that("mc_metrics warns when there is no truth to score against", {
     b <- demo_bits()
     run <- suppressWarnings(
-        run_wide_as_meta(b$dat, K = 1, verbose = FALSE)
+        run_wide_as_meta(b$dat, C = 1, verbose = FALSE)
     )
     expect_warning(
         m <- mc_metrics(run$fit),
@@ -154,7 +154,7 @@ test_that("a partly measured sample stops the run on every path", {
         "only partly measured"
     )
     expect_error(
-        run_wide_as_meta(partial, K = 1, verbose = FALSE),
+        run_wide_as_meta(partial, C = 1, verbose = FALSE),
         "only partly measured"
     )
 })
@@ -184,9 +184,9 @@ test_that("a fully NA sample is still fine, and is imputed", {
 test_that("kmeans_fd is a real alternative, not an alias", {
     b <- demo_bits()
     prep <- mc_prepare(b$dat, "OTU_ID", b$mask)
-    f_fpca <- suppressWarnings(mc_fit(prep, K = 2))
+    f_fpca <- suppressWarnings(mc_fit(prep, C = 2))
     f_kfd <- suppressWarnings(
-        mc_fit(prep, K = 2, cluster_method = "kmeans_fd")
+        mc_fit(prep, C = 2, cluster_method = "kmeans_fd")
     )
 
     expect_identical(f_fpca$cluster_method, "fpca")
@@ -206,7 +206,7 @@ test_that("an unknown cluster_method is rejected", {
     b <- demo_bits()
     prep <- mc_prepare(b$dat, "OTU_ID", b$mask)
     expect_error(
-        mc_fit(prep, K = 2, cluster_method = "nope"),
+        mc_fit(prep, C = 2, cluster_method = "nope"),
         "should be one of"
     )
 })

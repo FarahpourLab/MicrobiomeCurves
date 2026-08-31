@@ -31,21 +31,43 @@ tidy_up <- function() {
 on.exit(tidy_up(), add = TRUE)
 tidy_up()
 
+# A markdown table whose rows are long enough makes pandoc set proportional
+# column widths, as
+#     >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5}}
+# Pandoc's own default template loads what that needs. BiocStyle's does not,
+# so LaTeX stops at "Undefined control sequence" on \arraybackslash and only
+# the PDF fails. Supplying them here leaves the tables free to grow.
+real_fix <- tempfile(fileext = ".tex")
+writeLines(
+    c(
+        "\\usepackage{array}",
+        "\\usepackage{calc}",
+        "\\usepackage{longtable}",
+        "\\usepackage{booktabs}",
+        "\\providecommand{\\real}[1]{#1}",
+        "\\providecommand{\\tightlist}{%",
+        "  \\setlength{\\itemsep}{0pt}\\setlength{\\parskip}{0pt}}"
+    ),
+    real_fix
+)
+
 # Each format renders in its own process. Both write the same intermediate
 # file beside the source, so sharing a session makes the second one fail.
-render_one <- function(src, fmt) {
+render_one <- function(src, fmt, header) {
     callr::r(
-        function(src, fmt) {
+        function(src, fmt, header) {
             out <- if (fmt == "html") {
                 BiocStyle::html_document(toc_float = TRUE)
             } else {
-                BiocStyle::pdf_document(toc = TRUE)
+                BiocStyle::pdf_document(
+                    toc = TRUE, includes = list(in_header = header)
+                )
             }
             rmarkdown::render(src,
                 output_format = out, output_dir = ".", quiet = TRUE
             )
         },
-        args = list(src = src, fmt = fmt),
+        args = list(src = src, fmt = fmt, header = header),
         show = FALSE
     )
 }
@@ -53,7 +75,7 @@ render_one <- function(src, fmt) {
 made <- character(0)
 for (fmt in c("html", "pdf")) {
     message("Rendering ", toupper(fmt), " ...")
-    made <- c(made, render_one(src, fmt))
+    made <- c(made, render_one(src, fmt, real_fix))
     tidy_up()
 }
 

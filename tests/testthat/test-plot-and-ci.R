@@ -15,7 +15,7 @@ test_that("mc_plot works without dplyr or patchwork attached", {
     expect_false("package:dplyr" %in% search())
     expect_false("package:patchwork" %in% search())
 
-    fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
 
     p <- suppressWarnings(
         mc_plot(
@@ -31,7 +31,7 @@ test_that("mc_plot works without dplyr or patchwork attached", {
 })
 
 test_that("mc_plot rejects a species it never fitted", {
-    fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
 
     expect_error(
         suppressWarnings(
@@ -45,7 +45,7 @@ test_that("mc_plot rejects a species it never fitted", {
 })
 
 test_that("analytic confidence intervals are well formed", {
-    fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
 
     ci <- suppressWarnings(
         mc_ci(
@@ -66,7 +66,7 @@ test_that("analytic confidence intervals are well formed", {
 })
 
 test_that("the imputed value falls inside its own analytic interval", {
-    fit <- quiet_fit(demo_prep(), K = 1, seed = 123)
+    fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
     imp <- mc_impute(fit)
 
     ci <- suppressWarnings(

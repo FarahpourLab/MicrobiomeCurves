@@ -290,7 +290,7 @@ mc_bootstrap_ci <- function(Ly, Lt, target_rep, B = 500) {
 #'     taxon_col = "OTU_ID",
 #'     mask_list = data.frame(rep = "S01", time = 3)
 #' )
-#' fit <- suppressWarnings(mc_fit(prep, K = 1))
+#' fit <- suppressWarnings(mc_fit(prep, C = 1))
 #'
 #' # analytic intervals are cheap
 #' ci <- suppressWarnings(
