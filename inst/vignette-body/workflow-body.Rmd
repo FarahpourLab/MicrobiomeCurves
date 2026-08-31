@@ -6,27 +6,56 @@
 
 # Introduction
 
-Longitudinal microbiome studies often lose whole samples. A subject misses a
-visit, or a library fails quality control, and the affected subject-timepoint
-is absent from the abundance table. Removing those subjects discards usable
-data, and leaving the gap affects any downstream calculation.
+Longitudinal microbiome studies often lose whole samples. A subject may lack a sample at one time point, or a library may fail quality control, leaving an entire column absent from the abundance table. Removing the affected subjects discards usable data, while leaving the gaps can affect downstream calculations.
 
-`r Biocpkg("MicrobiomeCurves")` estimates the missing values. It models each
-taxon's abundance over time as a smooth curve and shares information across
-subjects using Functional Principal Component Analysis (FPCA) in the PACE
-formulation. The covariance surface is estimated from all subjects together,
-so sparse and irregularly sampled designs are supported. Per-subject smoothing
-is not possible for such designs.
+`r Biocpkg("MicrobiomeCurves")` estimates the missing values and returns a completed abundance table. It models each taxon over time, uses information from the available subjects, and calculates an imputed value for every taxon in each missing sample. The package also provides optional outlier screening, clustering and uncertainty intervals, as well as tools for benchmarking imputation against deliberately hidden values.
 
-The package handles missing whole samples. A sample column must therefore be
-either fully observed or entirely `NA`; a column holding values for some taxa
-and `NA` for others is a different problem, and is reported as an error rather
-than imputed.
+The package handles missing whole samples. A sample column must therefore be either fully observed or entirely `NA`. A column containing values for some taxa and `NA` for others represents a different problem, so the package reports it as an error rather than imputing it.
 
 ```{r load}
 library(MicrobiomeCurves)
 data(taxa_demo)
 ```
+
+# How the method works
+
+```{r concept-figure, echo = FALSE, out.width = "100%", fig.cap = "The method, panel by panel."}
+knitr::include_graphics("Fig_FPCA_concept.png")
+```
+
+Panel a starts with an abundance table. Taxa are rows and samples are columns. A sample is one subject at one time point and holds a value for every taxon. Here, subject means whatever the repeated measurements were taken on, such as a mouse, participant, plot or bioreactor.
+
+A missing sample removes every taxon at that time point. The gap is therefore a whole column, not a scattered cell. MicrobiomeCurves fills these missing columns. It does not fill scattered `NA` values within a measured sample, and rejects a column that contains values for some taxa and `NA` for others.
+
+Panel b shows the next step for one taxon. The package separates that taxon from the table and treats its values as a set of trajectories, one for each subject. It repeats the same process separately for every taxon.
+
+The values are analysed on the centred log ratio (CLR) scale. When `abundance_type = "raw"`, the package first replaces zeros and then transforms the raw counts to CLR values.
+
+Panel c shows how the package learns the common patterns in the trajectories for one taxon. It combines information from all subjects to find a mean trajectory and a small set of recurring ways in which subjects differ from that mean. Each subject can then be represented by a small number of scores that describe how strongly it follows each pattern. This technique is functional principal component analysis (FPCA), using the PACE formulation through `fdapace::FPCA`.
+
+The recurring patterns are called eigenfunctions. The package keeps enough of them to explain 99 percent of the variation, following the `fdapace` default. It combines the mean trajectory, the retained eigenfunctions and each subject's scores to obtain a fitted trajectory.
+
+This shared fit lets subjects borrow information from one another. The covariance surface is calculated from all subjects together, so the method supports sparse and irregular sets of measured time points. A subject with few measured samples can still receive a fitted trajectory, although that trajectory is drawn towards the population mean.
+
+Panel d shows optional outlier screening, which is on by default and controlled by `use_outliers`. The package gives each fitted trajectory a Fraiman-Muniz depth. Depth measures how central that trajectory is relative to the other trajectories for the same taxon.
+
+Trajectories below the 5 percent depth quantile are flagged and removed before the model is fitted again. The subject being imputed is always kept, even if its trajectory is flagged. If screening would leave fewer than two trajectories, outlier screening is skipped for that taxon.
+
+Panel e shows the optional clustering step, controlled by the package argument `K`. Clustering lets the final fit borrow most strongly from subjects whose trajectories are similar to that of the target subject. The FPCA model is fitted again within the target subject's cluster before the missing value is calculated.
+
+With `K = 1`, all subjects are pooled into one cluster. This is the fastest route. With `K = NULL`, the package chooses the number of clusters separately for each taxon by mean silhouette width.
+
+The `cluster_method` argument controls what is clustered. The default, `"fpca"`, applies k-means to the FPCA scores. The alternative, `"kmeans_fd"`, applies functional k-means to the fitted trajectories through `fda.usc::kmeans.fd`. If functional k-means fails on a small set of trajectories, the package falls back to `"fpca"` and counts and reports every fallback.
+
+The imputed value in panel e is the best linear unbiased prediction, or BLUP, at the missing time point. It is conditioned on the target subject's measured values and comes from the FPCA fit for that subject's cluster. The shaded band represents uncertainty around the prediction.
+
+The standard interval is calculated analytically from the covariance of the FPCA scores and includes noise. A bootstrap interval is also available through `mc_ci`. The uncertainty pages show every subject's trajectory, the fitted trajectory, the imputed value and its 95 percent band.
+
+The figure uses `K` for the number of FPCA components needed to explain 99 percent of the variation. The package argument `K` is the number of clusters. These are different quantities.
+
+The model uses the order of the time points, not their values. Days 0, 7 and 90 are fitted as if they were evenly spaced. This behaviour was verified by test. The original time values are retained for reporting, uncertainty-page axes and the names of any columns that must be created.
+
+There are two entry points. `mc_run` detects missing samples from an abundance table and its metadata, then returns the completed table. Because the missing values have no known truth, `mc_metrics` is not meaningful for this fit. For benchmarking, `mc_prepare` and `mc_fit` use an internal wide layout and a mask to hide known values deliberately, allowing `mc_metrics` to compare the imputed values with the truth.
 
 # Giving the package your own tables
 
@@ -367,19 +396,9 @@ Reading it:
 
 # Optional refinements
 
-Two refinements are available, both switched through `mc_fit()`:
+Both optional refinements were benchmarked in the accompanying publication. Outlier screening improved the results for 20 of 121 masks in one cohort, but reduced accuracy when more than 0.3 of the values were masked. Clustering did not improve accuracy for the masks that were tested.
 
-* **Functional outlier screening** (`use_outliers = TRUE`, the default) drops
-  trajectories below the 5% Fraiman-Muniz depth quantile before refitting. The
-  target subject is always kept.
-* **Trajectory clustering** (`K = NULL`) selects the number of clusters per
-  taxon by mean silhouette width and refits within the target's cluster.
-  `K = 1` pools all subjects and is considerably faster.
-
-Both were benchmarked in the accompanying publication. Outlier screening
-improved 20 of 121 masks on one cohort and reduced accuracy above 0.3 masking.
-Clustering did not improve accuracy on the masks tested. They are provided as
-diagnostic options, not as default improvements.
+These findings do not show either refinement to be a general improvement. The options are therefore provided for diagnostic use rather than as changes that should be expected to improve results by default.
 
 # Reproducibility
 
