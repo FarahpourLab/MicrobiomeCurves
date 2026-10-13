@@ -1,9 +1,15 @@
 # Numeric regression guard.
 #
-# These values were produced by the original package (published as
-# LongMiImpute) and verified to be bit-for-bit identical after the rename to
-# MicrobiomeCurves. They pin the numbers the imputation returns for a fixed
-# input, mask and seed.
+# These values pin the numbers the imputation returns for a fixed input,
+# mask and seed.
+#
+# They were regenerated on 2026-10-12, when the estimator changed. Until then
+# the package recomputed each subject's FPC scores with its own BLUP algebra;
+# it now reads the scores fdapace itself used, from fp$xiEst, so the value is
+# fdapace's own fitted curve at the nearest grid point. That makes the
+# package agree bit for bit with the original analysis scripts
+# (impute_FPCA_multi.R), which is what these numbers now represent. The
+# previous constants came from the recomputation and no longer apply.
 #
 # These tests fail if a change to the FPCA, CI, clustering or outlier code
 # alters the computed values. The published results depend on these numbers,
@@ -17,9 +23,9 @@
 
 test_that("imputed values for a fixed mask and seed have not changed", {
     expected_imputed <- c(
-        -0.438716933064, -0.139171897594, 1.055973932162, -1.608299264547,
-        1.396902714826, 0.815203014745, 0.848228706263, -1.834692261179,
-        -1.051379898447, -0.508832336939, -0.552737382916, -0.922789097269
+        -0.437956505400, -0.137865898166, 1.046200699461, -1.592710695464,
+        1.387937360709, 0.811784415369, 0.849457710695, -1.835141107832,
+        -1.048613426028, -0.506314640002, -0.550506957222, -0.930188319748
     )
 
     fit <- quiet_fit(demo_prep(), C = 1, use_outliers = TRUE, seed = 123)
@@ -59,12 +65,12 @@ test_that("mc_run output for the bundled data has not changed", {
 
     expect_equal(
         head(run$imputed$imputed_value, 6),
-        c(0.692524571439, 0.557688057361, -0.685291940706,
-            0.899446132207, 0.837783251969, -0.977631605642),
+        c(0.692609755148, 0.565286316687, -0.688724509638,
+            0.898977142979, 0.845289225360, -0.973382366093),
         tolerance = 1e-6
     )
     expect_equal(
-        sum(run$imputed$imputed_value), 6.773032458899,
+        sum(run$imputed$imputed_value), 6.797706401138,
         tolerance = 1e-6
     )
 })

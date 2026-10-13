@@ -88,8 +88,7 @@ mc_cell_interval <- function(fit, W_sp, clusters, rep_id, time_id) {
 
     ci <- mc_analytic_ci(
         fpca$fp,
-        obs_times = fpca$Lt[[rep_id]],
-        obs_values = fpca$Ly[[rep_id]],
+        subject = rep_id,
         pred_time = time_id,
         include_noise = TRUE
     )

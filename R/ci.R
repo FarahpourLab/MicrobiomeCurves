@@ -2,129 +2,102 @@
 # Analytic CI (internal)
 ############################################
 
-#' Analytic confidence interval for FPCA prediction
+#' Prediction and interval for one subject at one time, from fdapace
 #'
 #' @description
-#' Computes analytic (model-based) confidence intervals for FPCA predictions
-#' at a given time point for a single subject trajectory.
+#' The value is the one fdapace itself computed: its mean curve plus that
+#' subject's own scores, read at the grid point nearest the target time. That
+#' is exactly what `fitted(fp)` returns, so it matches the original analysis
+#' scripts.
 #'
-#' @details
-#' This function uses the FPCA model outputs (mean function, eigenfunctions,
-#' eigenvalues, and noise variance) to compute the conditional distribution
-#' of the predicted trajectory.
+#' The scores used to be recomputed here, from nearest grid points and a
+#' floored noise variance. On real data that diverged: for a subject with as
+#' many observed points as there were components and a noise variance of
+#' 1e-6, the recomputed scores came out three orders of magnitude too large,
+#' and the prediction with them. fdapace already returns the scores it used,
+#' so they are taken from there.
 #'
-#' The prediction is based on the Best Linear Unbiased Predictor (BLUP)
-#' of the subject-specific scores, and uncertainty is derived from the
-#' posterior variance of the FPCA scores.
+#' The interval comes from the same place, fdapace's per-subject score
+#' covariance, so it is consistent with the value.
 #'
-#' The variance of the predicted value is given by:
-#' \deqn{
-#' Var(\hat{Y}(t)) = \phi(t)^T V_{\xi} \phi(t) + \sigma^2
-#' }
+#' @param fp Fitted FPCA object carrying the `mc_subjects` attribute.
+#' @param subject Character identifier of the subject to predict for.
+#' @param pred_time Numeric time point to predict at.
+#' @param include_noise Add the noise variance to the prediction variance.
 #'
-#' where \eqn{V_{\xi}} is the conditional covariance of the FPCA scores.
-#'
-#' @param fp An FPCA object returned by \code{fdapace::FPCA}.
-#'
-#' @param obs_times Numeric vector of observed time points for the target
-#'  subject.
-#'
-#' @param obs_values Numeric vector of observed values corresponding to
-#'  \code{obs_times}.
-#'
-#' @param pred_time Numeric scalar. Time point at which prediction is computed.
-#'
-#' @param include_noise Logical. If \code{TRUE}, includes measurement noise
-#'   variance in the prediction variance. Default is \code{TRUE}.
-#'
-#' @return A list containing:
-#' \itemize{
-#'   \item \code{mean}: Predicted value at \code{pred_time}
-#'   \item \code{se}: Standard error of the prediction
-#'   \item \code{lower}: Lower bound of 95\% confidence interval
-#'   \item \code{upper}: Upper bound of 95\% confidence interval
-#' }
-#'
-#' @seealso
-#' \code{\link{mc_ci}}
+#' @return List with `mean`, `se`, `lower` and `upper`, or `NULL` when the
+#'   subject was not part of the fit. The interval is `NA` when fdapace
+#'   returned no usable score covariance; the value is still given, because
+#'   that is what the imputation needs.
 #'
 #' @keywords internal
 #' @noRd
-mc_analytic_ci <- function(fp, obs_times, obs_values, pred_time,
-                            include_noise = TRUE) {
-    if (is.null(fp)) return(NULL)
+mc_analytic_ci <- function(fp, subject, pred_time, include_noise = TRUE) {
+    if (is.null(fp)) {
+        return(NULL)
+    }
 
-    parts <- mc_fpca_parts(fp)
-    if (is.null(parts)) return(NULL)
+    grid <- fp$workGrid
+    mu <- fp$mu
+    phi <- fp$phi
+    xi <- fp$xiEst
+    if (is.null(grid) || is.null(mu) || is.null(phi) || is.null(xi)) {
+        return(NULL)
+    }
 
-    grid <- parts$grid
-    mu <- parts$mu
-    phi <- parts$phi
-    lambda <- parts$lambda
-    sigma2 <- parts$sigma2
+    subjects <- attr(fp, "mc_subjects")
+    i <- if (is.null(subjects)) NA_integer_ else match(subject, subjects)
 
-    # vapply, not sapply: for an empty obs_times sapply() returns an empty list,
-    # and `phi[list(), , drop = FALSE]` fails with "invalid subscript type".
-    # A subject can legitimately have no observations left once its samples are
-    # masked or missing. vapply() yields integer(0) there, and the algebra below
-    # then reduces to the population mean with the prior score variance, which
-    # is
-    # the correct answer when nothing subject-specific is known.
-    # For non-empty obs_times the two are identical.
-    obs_idx <- vapply(
-        obs_times, function(tt) which.min(abs(grid - tt)), integer(1)
-    )
-    pred_idx <- which.min(abs(grid - pred_time))
+    idx <- which.min(abs(grid - pred_time))
+    phi_t <- phi[idx, ]
+    s2 <- fp$sigma2
+    if (is.null(s2) || !is.finite(s2)) s2 <- 0
 
-    blup <- mc_score_blup(
-        Phi_i = phi[obs_idx, , drop = FALSE],
-        y_center = obs_values - mu[obs_idx],
-        lambda = lambda,
-        sigma2 = sigma2
-    )
-    if (is.null(blup)) return(NULL)
+    if (is.na(i) || i > nrow(xi)) {
+        # The subject is not in the fit, because it had too few observations
+        # for fdapace to score it. Nothing subject-specific is known, so the
+        # prediction is the population mean curve, which is the limit of the
+        # score estimate when there is nothing to condition on. The spread is
+        # the prior one, from the eigenvalues.
+        #
+        # The original scripts index fitted(fp) by the subject's position
+        # among all subjects, which in this situation points at a different
+        # subject's curve or past the end of the matrix. That is not
+        # reproduced here.
+        lambda <- fp$lambda
+        prior <- if (is.null(lambda)) NA_real_ else sum(lambda * phi_t^2)
+        v <- if (is.na(prior)) NA_real_ else prior + if (include_noise) s2 else 0
+        sd0 <- if (is.na(v)) NA_real_ else sqrt(max(v, 0))
+        return(list(
+            mean = as.numeric(mu[idx]),
+            se = sd0,
+            lower = as.numeric(mu[idx]) - 1.96 * sd0,
+            upper = as.numeric(mu[idx]) + 1.96 * sd0
+        ))
+    }
 
-    phi_t <- phi[pred_idx, ]
-    pred_mean <- as.numeric(mu[pred_idx] + crossprod(phi_t, blup$xi_hat))
+    # identical to fitted(fp)[i, idx]
+    pred_mean <- as.numeric(mu[idx] + crossprod(phi_t, xi[i, ]))
 
-    pred_var <- as.numeric(t(phi_t) %*% blup$V_xi %*% phi_t)
-    if (include_noise) pred_var <- pred_var + sigma2
-    pred_var <- max(pred_var, 0)
-    pred_sd <- sqrt(pred_var)
+    pred_sd <- NA_real_
+    xv <- fp$xiVar
+    if (!is.null(xv) && length(xv) >= i) {
+        V <- xv[[i]]
+        if (is.matrix(V) && all(dim(V) == length(phi_t)) &&
+            all(is.finite(V))) {
+            v <- as.numeric(t(phi_t) %*% V %*% phi_t)
+            if (include_noise) {
+                v <- v + s2
+            }
+            pred_sd <- sqrt(max(v, 0))
+        }
+    }
 
     list(
         mean = pred_mean,
         se = pred_sd,
         lower = pred_mean - 1.96 * pred_sd,
         upper = pred_mean + 1.96 * pred_sd
-    )
-}
-
-#' Best linear unbiased predictor of the FPCA scores
-#'
-#' @param Phi_i Matrix of eigenfunctions at the observed times, one row per
-#'   observation.
-#' @param y_center Numeric vector of observed values minus the mean function.
-#' @param lambda Numeric vector of eigenvalues.
-#' @param sigma2 Numeric measurement-error variance.
-#'
-#' @return List with the score covariance `V_xi` and the predicted scores
-#'   `xi_hat`, or `NULL` when the system cannot be solved.
-#'
-#' @keywords internal
-#' @noRd
-mc_score_blup <- function(Phi_i, y_center, lambda, sigma2) {
-    Lambda_inv <- diag(1 / lambda, nrow = length(lambda))
-
-    V_xi <- tryCatch(
-        solve(Lambda_inv + crossprod(Phi_i) / sigma2),
-        error = function(e) NULL
-    )
-    if (is.null(V_xi)) return(NULL)
-
-    list(
-        V_xi = V_xi,
-        xi_hat = V_xi %*% crossprod(Phi_i, y_center) / sigma2
     )
 }
 
@@ -350,11 +323,7 @@ mc_ci <- function(
     out <- list(fp = fp, analytic = NULL, bootstrap = NULL)
 
     if (method %in% c("analytic", "both")) {
-        out$analytic <- mc_analytic_band(
-            fp,
-            obs_times = fpca$Lt[[rep_id]],
-            obs_values = fpca$Ly[[rep_id]]
-        )
+        out$analytic <- mc_analytic_band(fp, subject = rep_id)
     }
 
     if (method %in% c("bootstrap", "both")) {

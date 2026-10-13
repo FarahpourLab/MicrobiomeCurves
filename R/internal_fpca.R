@@ -66,6 +66,13 @@ mc_safe_fpca <- function(Ly, Lt) {
 
     if (is.null(fit)) {
         mc_diag_bump("failed")
+        return(NULL)
     }
+
+    # The rows of fit$xiEst are the subjects passed in, in order, after the
+    # ones with too few observations were dropped. Recorded so a prediction
+    # can be matched back to its subject.
+    attr(fit, "mc_subjects") <- names(Ly_sub)
+
     fit
 }

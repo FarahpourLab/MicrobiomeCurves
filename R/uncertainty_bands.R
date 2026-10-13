@@ -74,8 +74,7 @@ mc_one_band <- function(fit, W_sp, members, rep_id, time_id) {
     ci <- lapply(grid, function(tt) {
         mc_analytic_ci(
             fpca$fp,
-            obs_times = fpca$Lt[[rep_id]], obs_values = fpca$Ly[[rep_id]],
-            pred_time = tt, include_noise = TRUE
+            subject = rep_id, pred_time = tt, include_noise = TRUE
         )
     })
     ok <- !vapply(ci, is.null, logical(1))

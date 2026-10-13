@@ -263,8 +263,7 @@ mc_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
 
     mc_analytic_ci(
         fp,
-        obs_times = Lt[[r_k]],
-        obs_values = Ly[[r_k]],
+        subject = r_k,
         pred_time = tt,
         include_noise = TRUE
     )
