@@ -342,3 +342,135 @@ mc_ci <- function(
 
     out
 }
+
+#' Nearest positive semi-definite version of a covariance matrix
+#'
+#' @description
+#' A score covariance returned by fdapace is a posterior covariance and so is
+#' positive semi-definite in exact arithmetic, but rounding can leave a tiny
+#' negative eigenvalue, and `chol()` then fails. Clamping the eigenvalues at
+#' zero gives the nearest matrix that factorises.
+#'
+#' @param A Square numeric matrix.
+#'
+#' @return `A`, symmetrised, with negative eigenvalues clamped.
+#'
+#' @keywords internal
+#' @noRd
+mc_psd <- function(A) {
+    e <- eigen((A + t(A)) / 2, symmetric = TRUE)
+    e$vectors %*% diag(pmax(e$values, 1e-10), length(e$values)) %*%
+        t(e$vectors)
+}
+
+#' Interval bounds for one cell, read off simulated draws
+#'
+#' @description
+#' The analytic interval is `mean +- 1.96 se`, which is symmetric and so can
+#' reach below the detection floor of the sample it belongs to. This function
+#' simulates the same posterior instead of solving it, holds every draw at or
+#' above that floor, and reads the 2.5% and 97.5% points off the result. The
+#' bounds that come back are asymmetric, by as much as the floor is binding.
+#'
+#' @details
+#' The draws reproduce the analytic interval when the floor does not bite, so
+#' nothing here is a different model: `mu + phi' xi` with
+#' `xi ~ N(xiEst, xiVar)` and measurement noise `sigma2` is exactly the
+#' distribution whose standard deviation [mc_analytic_ci()] computes in closed
+#' form.
+#'
+#' The draws run on their own RNG stream. The fit sets one seed and the
+#' clustering step consumes from it for the rest of the run, so taking random
+#' numbers here without restoring the stream would change which subjects enter
+#' later fits, and with them the imputed values.
+#'
+#' @param fp A fitted `fdapace::FPCA` object.
+#' @param subject Character identifier of the target subject.
+#' @param pred_time Numeric time point to predict.
+#' @param floor_v Numeric detection floor of the cell's own sample. The bounds
+#'   are `NULL` when this is not finite.
+#' @param ndraw Integer number of draws.
+#' @param cell_seed Integer seed for this cell, so the bounds are reproducible.
+#'
+#' @return List with `lower`, `upper`, and `share`, the fraction of draws the
+#'   floor held up. `NULL` when the cell cannot be drawn from.
+#'
+#' @keywords internal
+#' @noRd
+mc_cell_bounds <- function(fp, subject, pred_time, floor_v,
+                            ndraw = 10000L, cell_seed = 1L) {
+    if (!is.finite(floor_v) || ndraw < 1L) {
+        return(NULL)
+    }
+
+    grid <- fp$workGrid
+    mu <- fp$mu
+    phi <- fp$phi
+    xi <- fp$xiEst
+    if (is.null(grid) || is.null(mu) || is.null(phi) || is.null(xi)) {
+        return(NULL)
+    }
+
+    idx <- which.min(abs(grid - pred_time))
+    phi_t <- phi[idx, ]
+    k <- length(phi_t)
+    s2 <- fp$sigma2
+    if (is.null(s2) || !is.finite(s2) || s2 < 0) s2 <- 0
+
+    subjects <- attr(fp, "mc_subjects")
+    i <- if (is.null(subjects)) NA_integer_ else match(subject, subjects)
+
+    if (is.na(i) || i > nrow(xi)) {
+        # Not scored by fdapace, so the draws come from the population, which
+        # is the same fallback [mc_analytic_ci()] takes.
+        lambda <- fp$lambda
+        if (is.null(lambda) || length(lambda) != k) {
+            return(NULL)
+        }
+        centre <- as.numeric(mu[idx])
+        v_mat <- diag(lambda, k)
+    } else {
+        centre <- as.numeric(mu[idx] + crossprod(phi_t, xi[i, ]))
+        xv <- fp$xiVar
+        if (is.null(xv) || length(xv) < i) {
+            return(NULL)
+        }
+        v_mat <- xv[[i]]
+        if (!is.matrix(v_mat) || !all(dim(v_mat) == k) ||
+            !all(is.finite(v_mat))) {
+            return(NULL)
+        }
+    }
+
+    fac <- tryCatch(t(chol(mc_psd(v_mat))), error = function(e) NULL)
+    if (is.null(fac)) {
+        return(NULL)
+    }
+
+    draws <- withr::with_preserve_seed({
+        mc_reset_rng(cell_seed)
+        z <- matrix(stats::rnorm(k * ndraw), k, ndraw)
+        as.numeric(centre + crossprod(phi_t, fac %*% z)) +
+            stats::rnorm(ndraw, 0, sqrt(s2))
+    })
+
+    share <- mean(draws < floor_v)
+    if (share == 0) {
+        # Nothing was censored, so the draws are estimating a distribution
+        # that is symmetric, and their quantiles differ from the closed form
+        # only by simulation error. Reporting that error would show as
+        # asymmetry that is not there, so the exact bounds are used instead.
+        sd_a <- sqrt(max(
+            as.numeric(t(phi_t) %*% v_mat %*% phi_t) + s2, 0
+        ))
+        return(list(
+            lower = centre - 1.96 * sd_a,
+            upper = centre + 1.96 * sd_a,
+            share = 0
+        ))
+    }
+
+    draws <- pmax(draws, floor_v)
+    q <- stats::quantile(draws, c(0.025, 0.975), names = FALSE)
+    list(lower = q[1], upper = q[2], share = share)
+}

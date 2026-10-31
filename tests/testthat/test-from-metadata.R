@@ -357,8 +357,9 @@ test_that("out_dir writes the completed table and a run log", {
         out_dir = out, C = 1, verbose = FALSE
     ))
 
-    # three tables, the log, and one uncertainty PDF
-    expect_length(run$files, 5)
+    # three tables, the uncertainty table, the log, and one uncertainty PDF
+    expect_length(run$files, 6)
+    expect_true(any(grepl("imputed_uncertainty[.]tsv$", run$files)))
     expect_true(all(file.exists(run$files)))
     expect_true(any(grepl("uncertainty_by_taxon[.]pdf$", run$files)))
 
@@ -413,8 +414,11 @@ test_that("uncertainty plotting can be turned off and switched to png", {
         sample_col = "sample", subject_col = "subject", time_col = "day",
         out_dir = out, plots = FALSE, C = 1, verbose = FALSE
     ))
-    expect_length(off$files, 4)
-    expect_false(any(grepl("uncertainty", off$files)))
+    # The uncertainty table is written either way: plots = FALSE turns off the
+    # drawing, not the reporting.
+    expect_length(off$files, 5)
+    expect_true(any(grepl("imputed_uncertainty[.]tsv$", off$files)))
+    expect_false(any(grepl("uncertainty_by_taxon|uncertainty_png", off$files)))
     unlink(out, recursive = TRUE)
 
     png_out <- file.path(tempdir(), "mc_plots_png")

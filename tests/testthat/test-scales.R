@@ -77,7 +77,7 @@ test_that("counts are the same every time the same data is run", {
     expect_identical(mc_ra_to_counts(ra, 731), mc_ra_to_counts(ra, 731))
 })
 
-test_that("three tables and a log are written", {
+test_that("three tables, the uncertainty table and a log are written", {
     dir <- withr::local_tempdir()
     d <- make_counts()
     run <- run_it(d$counts, "raw", dir)
@@ -86,7 +86,8 @@ test_that("three tables and a log are written", {
         basename(run$files),
         c(
             "imputed_clr.tsv", "imputed_relative_abundance.tsv",
-            "imputed_counts.tsv", "imputation_log.txt"
+            "imputed_counts.tsv", "imputed_uncertainty.tsv",
+            "imputation_log.txt"
         )
     )
     expect_true(all(file.exists(run$files)))

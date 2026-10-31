@@ -247,7 +247,9 @@ mc_cell_members <- function(Ly, Lt, outliers, r_k, C, taxon_name, seed,
 #'
 #' @keywords internal
 #' @noRd
-mc_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
+mc_impute_cell <- function(Ly, Lt, sel, r_k, tt,
+                            floor_v = NA_real_, ndraw = 0L,
+                            cell_seed = 1L) {
     Ly_cl <- Ly[sel$members]
     Lt_cl <- Lt[sel$members]
 
@@ -261,12 +263,26 @@ mc_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
         return(NULL)
     }
 
-    mc_analytic_ci(
+    ci <- mc_analytic_ci(
         fp,
         subject = r_k,
         pred_time = tt,
         include_noise = TRUE
     )
+    if (is.null(ci)) {
+        return(NULL)
+    }
+
+    # The same fit, asked a second question. Nothing here feeds back into
+    # ci$mean, which is the imputed value.
+    drawn <- mc_cell_bounds(fp, r_k, tt, floor_v, ndraw, cell_seed)
+
+    c(ci, list(
+        clr_floor = floor_v,
+        lower_drawn = if (is.null(drawn)) NA_real_ else drawn$lower,
+        upper_drawn = if (is.null(drawn)) NA_real_ else drawn$upper,
+        at_floor = if (is.null(drawn)) NA_real_ else drawn$share
+    ))
 }
 
 #' Fit one taxon and impute each of its masked cells
@@ -286,7 +302,8 @@ mc_impute_cell <- function(Ly, Lt, sel, r_k, tt) {
 #' @keywords internal
 #' @noRd
 mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
-                          C, taxon_name, seed, cluster_method = "fpca") {
+                          C, taxon_name, seed, cluster_method = "fpca",
+                          floors = NULL, ndraw = 0L) {
     traj <- mc_taxon_trajectories(df_sp, reps)
     Ly <- traj$Ly
     Lt <- traj$Lt
@@ -298,27 +315,54 @@ mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
 
     imputed <- rep(NA_real_, length(rows))
     used <- rep(FALSE, length(rows))
+    std_err <- rep(NA_real_, length(rows))
+    lower_sym <- rep(NA_real_, length(rows))
+    upper_sym <- rep(NA_real_, length(rows))
+    clr_floor <- rep(NA_real_, length(rows))
+    lower <- rep(NA_real_, length(rows))
+    upper <- rep(NA_real_, length(rows))
+    at_floor <- rep(NA_real_, length(rows))
 
     for (j in seq_along(rows)) {
         k <- rows[j]
         r_k <- pred_long$rep[k]
         tt <- pred_long$time[k]
 
+        floor_v <- NA_real_
+        if (!is.null(floors)) {
+            fk <- floors[[pred_long$col[k]]]
+            if (!is.null(fk)) floor_v <- fk
+        }
+
         sel <- mc_cell_members(
             Ly, Lt, outliers, r_k, C, taxon_name, seed, cluster_method
         )
-        ci_obj <- mc_impute_cell(Ly, Lt, sel, r_k, tt)
+        ci_obj <- mc_impute_cell(
+            Ly, Lt, sel, r_k, tt, floor_v, ndraw, seed + k
+        )
 
         if (!is.null(ci_obj)) {
             imputed[j] <- ci_obj$mean
             used[j] <- TRUE
+            std_err[j] <- ci_obj$se
+            lower_sym[j] <- ci_obj$lower
+            upper_sym[j] <- ci_obj$upper
+            clr_floor[j] <- ci_obj$clr_floor
+            lower[j] <- ci_obj$lower_drawn
+            upper[j] <- ci_obj$upper_drawn
+            at_floor[j] <- ci_obj$at_floor
         }
     }
 
     list(
         outliers = outliers,
         clusters = clusters,
-        values = data.frame(imputed = imputed, used = used)
+        values = data.frame(
+            imputed = imputed, used = used, std_err = std_err,
+            lower_sym = lower_sym, upper_sym = upper_sym,
+            clr_floor = clr_floor, lower = lower, upper = upper,
+            at_floor = at_floor
+        )
     )
 }
 
@@ -340,7 +384,8 @@ mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
 #' @noRd
 mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
                              pred_long, use_outliers, C, seed,
-                             cluster_method = "fpca") {
+                             cluster_method = "fpca",
+                             floors = NULL, ndraw = 0L) {
     n_taxa <- length(species_vec)
     clusters_by_taxon <- vector("list", length = n_taxa)
     outliers_by_taxon <- vector("list", length = n_taxa)
@@ -354,13 +399,20 @@ mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
 
         res <- mc_fit_taxon(
             df_sp, reps, rows, pred_long, use_outliers, C, sp_name, seed,
-            cluster_method
+            cluster_method, floors, ndraw
         )
 
         outliers_by_taxon[[i]] <- res$outliers
         clusters_by_taxon[[i]] <- res$clusters
         pred_long$imputed_value[rows] <- res$values$imputed
         pred_long$FPCA_used[rows] <- res$values$used
+        pred_long$std_err[rows] <- res$values$std_err
+        pred_long$lower_sym[rows] <- res$values$lower_sym
+        pred_long$upper_sym[rows] <- res$values$upper_sym
+        pred_long$clr_floor[rows] <- res$values$clr_floor
+        pred_long$lower[rows] <- res$values$lower
+        pred_long$upper[rows] <- res$values$upper
+        pred_long$at_floor[rows] <- res$values$at_floor
     }
 
     list(
@@ -368,6 +420,39 @@ mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
         clusters = clusters_by_taxon,
         outliers = outliers_by_taxon
     )
+}
+
+#' The detection floor of every sample
+#'
+#' @description
+#' Zero replacement puts every taxon absent from a sample on the same value,
+#' so the smallest value in a column is the lowest abundance that sample could
+#' have recorded. An imputed value below it is not a possible observation.
+#'
+#' @details
+#' The floors are taken from the masked table, never from the original. A
+#' benchmark run knows the held-out truth and must not let it reach the
+#' reported uncertainty; a production run has nothing else to use.
+#'
+#' @param dat The masked wide table.
+#' @param col_map Column map from [mc_prepare()].
+#'
+#' @return Named numeric vector of floors, one per sample column. A column
+#'   with nothing left in it takes the smallest value in the table.
+#'
+#' @keywords internal
+#' @noRd
+mc_sample_floors <- function(dat, col_map) {
+    cols <- col_map$col
+    m <- as.matrix(dat[, cols, drop = FALSE])
+    floors <- suppressWarnings(apply(m, 2, min, na.rm = TRUE))
+    overall <- suppressWarnings(min(m, na.rm = TRUE))
+    floors[!is.finite(floors)] <- if (is.finite(overall)) {
+        overall
+    } else {
+        NA_real_
+    }
+    stats::setNames(as.numeric(floors), cols)
 }
 
 #' Mask the target cells and reshape the table to long form
@@ -423,6 +508,13 @@ mc_build_targets <- function(dat_orig, taxon_col, mask_pairs, n_taxa) {
             function(i, col) dat_orig[[col]][i], taxon_idx, col
         ),
         imputed_value = NA_real_,
-        FPCA_used = FALSE
+        FPCA_used = FALSE,
+        std_err = NA_real_,
+        lower_sym = NA_real_,
+        upper_sym = NA_real_,
+        clr_floor = NA_real_,
+        lower = NA_real_,
+        upper = NA_real_,
+        at_floor = NA_real_
     )
 }

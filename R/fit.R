@@ -239,9 +239,13 @@ mc_fit <- function(prep, C = NULL,
     mc_diag_reset()
     on.exit(mc_diag_clear(), add = TRUE)
 
+    # The floor of each sample, for the reported bounds. Read off the masked
+    # table so a benchmark run cannot leak its held-out truth into them.
+    floors <- mc_sample_floors(dat, prep$col_map)
+
     ft <- mc_fit_all_taxa(
         long, taxon_col, species_vec, reps, pred_long,
-        use_outliers, C, seed, cluster_method
+        use_outliers, C, seed, cluster_method, floors, MC_NDRAW
     )
     pred_long <- dplyr::mutate(
         ft$pred_long, se = (true_value - imputed_value)^2
