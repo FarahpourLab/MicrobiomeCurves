@@ -227,6 +227,14 @@ mc_detect_missing <- function(
 #' @param min_observed Integer. Observed time-point count below which a
 #'   subject stops the run. Default \code{2}.
 #' @param verbose Logical. Print progress. Default \code{TRUE}.
+#' @param group_col Optional name of a column in \code{metadata} holding
+#'   a group label, such as a treatment arm or a disease status. When given,
+#'   the samples are split on it and each group is imputed entirely on
+#'   its own, so no group contributes to another's imputed values. Each
+#'   writes its own full set of files into a subdirectory of \code{out_dir},
+#'   and the completed tables are also merged back into the caller's
+#'   original layout at the top level. A subject must sit in exactly one
+#'   group. Default \code{NULL}, which imputes every sample together.
 #'
 #' @return An object of class \code{"mc_run"}: a list with
 #' \itemize{
@@ -308,6 +316,7 @@ setMethod("mc_run", "data.frame", function(
     seed = 123,
     min_observed = 2,
     verbose = TRUE,
+    group_col = NULL,
     ...
 ) {
     mc_check_dots(...)
@@ -316,7 +325,7 @@ setMethod("mc_run", "data.frame", function(
         match.arg(abundance_type), pseudocount, out_dir,
         plots, dpi, match.arg(plot_format),
         C, match.arg(cluster_method), use_outliers, seed,
-        min_observed, verbose
+        min_observed, verbose, group_col
     )
 })
 
@@ -340,6 +349,7 @@ setMethod("mc_run", "matrix", function(
     seed = 123,
     min_observed = 2,
     verbose = TRUE,
+    group_col = NULL,
     ...
 ) {
     # A matrix is the natural shape for taxa-in-row-names abundance data, so
@@ -351,7 +361,7 @@ setMethod("mc_run", "matrix", function(
         match.arg(abundance_type), pseudocount, out_dir,
         plots, dpi, match.arg(plot_format),
         C, match.arg(cluster_method), use_outliers, seed,
-        min_observed, verbose
+        min_observed, verbose, group_col
     )
 })
 

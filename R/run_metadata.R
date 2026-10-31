@@ -33,9 +33,22 @@ mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
                                   time_col, abundance_type, pseudocount,
                                   out_dir, plots, dpi, plot_format,
                                   C, cluster_method, use_outliers,
-                                  seed, min_observed, verbose) {
+                                  seed, min_observed, verbose,
+                                  group_col = NULL) {
     mc_check_meta_args(sample_col, subject_col, time_col)
     mc_check_dpi(dpi)
+
+    # Each group is a study of its own, so the split happens before any
+    # of the work below and every group goes through this function again
+    # with nothing left to split on.
+    if (!is.null(group_col)) {
+        return(mc_run_groups(
+            dat, metadata, sample_col, subject_col, time_col,
+            abundance_type, pseudocount, out_dir, plots, dpi, plot_format,
+            C, cluster_method, use_outliers, seed, min_observed, verbose,
+            group_col
+        ))
+    }
 
     seen <- new.env(parent = emptyenv())
     seen$warned <- character(0)

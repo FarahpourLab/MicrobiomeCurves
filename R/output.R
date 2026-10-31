@@ -47,6 +47,10 @@ mc_write_output <- function(run, out_dir, warnings = character(0)) {
 #' The bounds come from the same FPCA fit that produced the value, read a
 #' second time. The imputed values are untouched by any of this.
 #'
+#' Built from `run$imputed` rather than `run$fit$pred_long`. The two hold the
+#' same rows, but the fit works in internal subject codes and time positions,
+#' and only `run$imputed` has had the caller's own names put back.
+#'
 #' @param run The `mc_run` object.
 #' @param out_dir Directory to write into.
 #'
@@ -55,20 +59,33 @@ mc_write_output <- function(run, out_dir, warnings = character(0)) {
 #' @keywords internal
 #' @noRd
 mc_write_uncertainty_table <- function(run, out_dir) {
-    pred <- run$fit$pred_long
+    pred <- run$imputed
     if (is.null(pred) || nrow(pred) == 0 || is.null(pred$lower)) {
         return(character(0))
     }
 
+    # A run started from a wide table never had the caller's names to
+    # restore, so it carries the encoded ones and those are what it gets.
+    subject <- if (is.null(pred$subject)) pred$rep else pred$subject
+
     out <- data.frame(
         taxon = pred$species,
-        subject = pred$rep,
+        subject = subject,
         timepoint = pred$time,
         imputed = pred$imputed_value,
         lower = pred$lower,
         upper = pred$upper,
         stringsAsFactors = FALSE
     )
+
+    # A split run says which group each row was imputed within, since
+    # the same subject label can mean nothing outside its own group. The
+    # column is always called `group`, whatever the caller's own column
+    # was named, so a reader of the file needs to know only this format.
+    cc <- run$group_col
+    if (!is.null(cc) && !is.null(pred[[cc]])) {
+        out$group <- as.character(pred[[cc]])
+    }
 
     f <- file.path(out_dir, "imputed_uncertainty.tsv")
     utils::write.table(

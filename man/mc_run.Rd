@@ -27,6 +27,7 @@ mc_run(dat, ...)
   seed = 123,
   min_observed = 2,
   verbose = TRUE,
+  group_col = NULL,
   ...
 )
 
@@ -48,6 +49,7 @@ mc_run(dat, ...)
   seed = 123,
   min_observed = 2,
   verbose = TRUE,
+  group_col = NULL,
   ...
 )
 
@@ -124,6 +126,15 @@ enables functional-depth outlier screening.}
 subject stops the run. Default \code{2}.}
 
 \item{verbose}{Logical. Print progress. Default \code{TRUE}.}
+
+\item{group_col}{Optional name of a column in \code{metadata} holding
+a group label, such as a treatment arm or a disease status. When given,
+the samples are split on it and each group is imputed entirely on
+its own, so no group contributes to another's imputed values. Each
+writes its own full set of files into a subdirectory of \code{out_dir},
+and the completed tables are also merged back into the caller's
+original layout at the top level. A subject must sit in exactly one
+group. Default \code{NULL}, which imputes every sample together.}
 
 \item{assay_name}{Character or \code{NULL}. Which assay to impute. Defaults to
 the first assay.}
