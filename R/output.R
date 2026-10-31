@@ -36,32 +36,16 @@ mc_write_output <- function(run, out_dir, warnings = character(0)) {
     invisible(c(written, log))
 }
 
-# How many draws stand behind each reported bound. Enough that the two
-# quantiles are stable to about three decimals, which was reached by a few
-# thousand; the cost is a few milliseconds per cell against the FPCA fit the
-# cell has already paid for.
-MC_NDRAW <- 10000L
-
 #' Write one row of uncertainty per imputed cell
 #'
 #' @description
-#' The completed tables carry point estimates only. This file carries what the
-#' run knew about each of them: the standard error, the symmetric interval it
-#' implies, and the interval read off simulated draws held at the sample's
-#' detection floor.
+#' The completed tables carry point estimates only. This file carries the
+#' interval the run knew around each of them: `imputed +- 1.96 se`, equal
+#' width on both sides.
 #'
 #' @details
-#' Two intervals are written because they answer different questions.
-#' `lower_sym` and `upper_sym` are `imputed +- 1.96 std_err`, equal width on
-#' both sides, and can fall below `clr_floor`. `lower` and `upper` cannot,
-#' and are the wider on the upper side by however much the floor is binding.
-#' `err_low` and `err_high` are those two gaps, so a reader who wants one
-#' asymmetric error bar per point needs no arithmetic. `at_floor` is the share
-#' of the draws the floor held up, and is how far from symmetric to expect the
-#' two gaps to be: at zero they are equal to the last decimal, because the
-#' closed form is used rather than the draws.
-#'
-#' The imputed values are untouched by any of this.
+#' The bounds come from the same FPCA fit that produced the value, read a
+#' second time. The imputed values are untouched by any of this.
 #'
 #' @param run The `mc_run` object.
 #' @param out_dir Directory to write into.
@@ -72,7 +56,7 @@ MC_NDRAW <- 10000L
 #' @noRd
 mc_write_uncertainty_table <- function(run, out_dir) {
     pred <- run$fit$pred_long
-    if (is.null(pred) || nrow(pred) == 0 || is.null(pred$std_err)) {
+    if (is.null(pred) || nrow(pred) == 0 || is.null(pred$lower)) {
         return(character(0))
     }
 
@@ -81,16 +65,8 @@ mc_write_uncertainty_table <- function(run, out_dir) {
         subject = pred$rep,
         timepoint = pred$time,
         imputed = pred$imputed_value,
-        std_err = pred$std_err,
-        lower_sym = pred$lower_sym,
-        upper_sym = pred$upper_sym,
-        clr_floor = pred$clr_floor,
         lower = pred$lower,
         upper = pred$upper,
-        err_low = pred$imputed_value - pred$lower,
-        err_high = pred$upper - pred$imputed_value,
-        at_floor = pred$at_floor,
-        FPCA_used = pred$FPCA_used,
         stringsAsFactors = FALSE
     )
 
