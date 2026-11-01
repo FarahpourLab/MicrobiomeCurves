@@ -1,20 +1,17 @@
-# Drawing per-taxon uncertainty, and collecting it into one PDF.
+# Drawing per-taxon uncertainty.
 #
-# One page per taxon, each imputed value shown with its interval. A page is
-# readable on its own, and the file as a whole is the thing to look at before
-# treating imputed values as data.
+# One image per taxon, each imputed value shown with its interval. An image
+# is readable on its own, and the set as a whole is the thing to look at
+# before treating imputed values as data.
 
-#' Write one uncertainty page per taxon
+#' Write one uncertainty image per taxon
 #'
 #' @description
-#' Every taxon gets a page in one PDF. The PDF is vector art, so it is sharp
-#' at any magnification and `dpi` does not apply to it; `dpi` governs the
-#' PNG copies, which are written one per taxon when asked for.
+#' Every taxon gets a PNG under `uncertainty_png/`, at `dpi`.
 #'
 #' @param run The `mc_run` object.
 #' @param out_dir Directory to write into.
-#' @param dpi Resolution for the PNG copies, in dots per inch.
-#' @param format Either `"pdf"`, `"png"`, or `"both"`.
+#' @param dpi Resolution, in dots per inch.
 #' @param say Function used to report progress.
 #'
 #' @return Character vector of the paths written, or `NULL` when there was
@@ -22,7 +19,7 @@
 #'
 #' @keywords internal
 #' @noRd
-mc_write_uncertainty <- function(run, out_dir, dpi, format, say) {
+mc_write_uncertainty <- function(run, out_dir, dpi, say) {
     taxa <- unique(run$fit$pred_long$species)
     if (length(taxa) == 0) {
         return(NULL)
@@ -52,14 +49,7 @@ mc_write_uncertainty <- function(run, out_dir, dpi, format, say) {
         return(NULL)
     }
 
-    out <- character(0)
-    if (format %in% c("pdf", "both")) {
-        out <- c(out, mc_uncertainty_pdf(named, out_dir))
-    }
-    if (format %in% c("png", "both")) {
-        out <- c(out, mc_uncertainty_png(named, out_dir, dpi))
-    }
-    out
+    mc_uncertainty_png(named, out_dir, dpi)
 }
 
 #' Flatten per-taxon page lists into one named list of pages
@@ -84,31 +74,6 @@ mc_flatten_pages <- function(pages) {
         out[nms] <- ps
     }
     out
-}
-
-#' Collect the pages into one PDF
-#'
-#' @param named Named list of plots, one per taxon.
-#' @param out_dir Directory to write into.
-#'
-#' @return The path written.
-#'
-#' @keywords internal
-#' @noRd
-mc_uncertainty_pdf <- function(named, out_dir) {
-    path <- file.path(out_dir, "uncertainty_by_taxon.pdf")
-
-    grDevices::pdf(path, width = 8, height = 5, onefile = TRUE)
-    on.exit(grDevices::dev.off(), add = TRUE)
-
-    # Drawn through grid rather than print(), which draws the same page but
-    # is the printing method for interactive use.
-    for (p in named) {
-        grid::grid.newpage()
-        grid::grid.draw(ggplot2::ggplotGrob(p))
-    }
-
-    path
 }
 
 #' Write one PNG per taxon at the requested resolution

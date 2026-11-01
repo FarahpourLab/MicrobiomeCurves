@@ -20,7 +20,6 @@ mc_trends(
   out_dir = NULL,
   plots = FALSE,
   dpi = 300,
-  plot_format = c("pdf", "png", "both"),
   n_cores = 1,
   verbose = TRUE
 )
@@ -68,9 +67,7 @@ any fit.}
 
 \item{plots}{Logical. Whether to draw one figure per significant taxon.}
 
-\item{dpi}{Resolution for PNG output.}
-
-\item{plot_format}{One of \code{"pdf"}, \code{"png"} or \code{"both"}.}
+\item{dpi}{Resolution of the per-taxon images, in dots per inch.}
 
 \item{n_cores}{Number of cores. Taxa are independent, so this splits by
 taxon. Forking only; ignored on Windows.}

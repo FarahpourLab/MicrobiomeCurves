@@ -128,7 +128,7 @@ mc_subset_samples <- function(dat, keep) {
 #' different scales and make them incomparable.
 #'
 #' @param dat,metadata,sample_col,subject_col,time_col As in [mc_run()].
-#' @param abundance_type,pseudocount,out_dir,plots,dpi,plot_format As in
+#' @param abundance_type,pseudocount,out_dir As in
 #'   [mc_run()].
 #' @param C,cluster_method,use_outliers,seed,min_observed,verbose As in
 #'   [mc_run()].
@@ -141,7 +141,7 @@ mc_subset_samples <- function(dat, keep) {
 #' @noRd
 mc_run_groups <- function(dat, metadata, sample_col, subject_col,
                                time_col, abundance_type, pseudocount,
-                               out_dir, plots, dpi, plot_format,
+                               out_dir,
                                C, cluster_method, use_outliers,
                                seed, min_observed, verbose, group_col) {
     groups <- mc_group_samples(
@@ -163,8 +163,8 @@ mc_run_groups <- function(dat, metadata, sample_col, subject_col,
         }
         res <- mc_try_group(
             dat, metadata, groups[[nm]], nm, sample_col, subject_col,
-            time_col, abundance_type, pseudocount, sub_dir, plots, dpi,
-            plot_format, C, cluster_method, use_outliers, seed,
+            time_col, abundance_type, pseudocount, sub_dir,
+            C, cluster_method, use_outliers, seed,
             min_observed, verbose
         )
         if (is.null(res$run)) {
@@ -193,8 +193,8 @@ mc_run_groups <- function(dat, metadata, sample_col, subject_col,
 
     if (!is.null(out_dir)) {
         # The merged tables only. Each group has already written its own
-        # log and its own plots, which cannot be merged because the two
-        # carry different subjects.
+        # log, which cannot be merged because each describes a different
+        # set of subjects.
         written <- mc_write_output(merged, out_dir, merged$warnings)
         merged$files <- c(
             written, unlist(lapply(runs, function(r) r$files), use.names = FALSE)
@@ -215,7 +215,7 @@ mc_run_groups <- function(dat, metadata, sample_col, subject_col,
 #' @param sample_col,subject_col,time_col,abundance_type,pseudocount As in
 #'   [mc_run()].
 #' @param sub_dir Directory for this group, or `NULL`.
-#' @param plots,dpi,plot_format,C,cluster_method,use_outliers,seed As in
+#' @param C,cluster_method,use_outliers,seed As in
 #'   [mc_run()].
 #' @param min_observed,verbose As in [mc_run()].
 #'
@@ -225,7 +225,7 @@ mc_run_groups <- function(dat, metadata, sample_col, subject_col,
 #' @noRd
 mc_try_group <- function(dat, metadata, keep, nm, sample_col,
                               subject_col, time_col, abundance_type,
-                              pseudocount, sub_dir, plots, dpi, plot_format,
+                              pseudocount, sub_dir,
                               C, cluster_method, use_outliers, seed,
                               min_observed, verbose) {
     md <- metadata[as.character(metadata[[sample_col]]) %in% keep, ,
@@ -235,7 +235,7 @@ mc_try_group <- function(dat, metadata, keep, nm, sample_col,
     run <- tryCatch(
         mc_run_from_metadata(
             ab, md, sample_col, subject_col, time_col, abundance_type,
-            pseudocount, sub_dir, plots, dpi, plot_format, C,
+            pseudocount, sub_dir, C,
             cluster_method, use_outliers, seed, min_observed, verbose
         ),
         error = function(e) {

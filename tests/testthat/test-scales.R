@@ -29,7 +29,7 @@ run_it <- function(x, type, dir) {
     suppressWarnings(mc_run(
         x, d$metadata,
         sample_col = "SampleID", subject_col = "SubjectID", time_col = "Day",
-        abundance_type = type, out_dir = dir, plots = FALSE,
+        abundance_type = type, out_dir = dir,
         C = 1, verbose = FALSE
     ))
 }

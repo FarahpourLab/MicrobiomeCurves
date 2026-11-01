@@ -31,12 +31,11 @@
 #' @noRd
 mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
                                   time_col, abundance_type, pseudocount,
-                                  out_dir, plots, dpi, plot_format,
+                                  out_dir,
                                   C, cluster_method, use_outliers,
                                   seed, min_observed, verbose,
                                   group_col = NULL) {
     mc_check_meta_args(sample_col, subject_col, time_col)
-    mc_check_dpi(dpi)
 
     # Each group is a study of its own, so the split happens before any
     # of the work below and every group goes through this function again
@@ -44,7 +43,7 @@ mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
     if (!is.null(group_col)) {
         return(mc_run_groups(
             dat, metadata, sample_col, subject_col, time_col,
-            abundance_type, pseudocount, out_dir, plots, dpi, plot_format,
+            abundance_type, pseudocount, out_dir,
             C, cluster_method, use_outliers, seed, min_observed, verbose,
             group_col
         ))
@@ -82,9 +81,7 @@ mc_run_from_metadata <- function(dat, metadata, sample_col, subject_col,
     )
 
     run <- mc_attach_scale_info(run, dat, abundance_type)
-    mc_finish_run(
-        run, seen$warned, out_dir, plots, dpi, plot_format, verbose
-    )
+    mc_finish_run(run, seen$warned, out_dir, verbose)
 }
 
 #' Record what scale the caller supplied
@@ -117,22 +114,19 @@ mc_attach_scale_info <- function(run, abundance, abundance_type) {
 #' @param run The finished run.
 #' @param warned Character vector of warnings raised during the run.
 #' @param out_dir Directory to write to, or `NULL`.
-#' @param plots,dpi,plot_format,verbose As in [mc_run()].
+#' @param verbose As in [mc_run()].
 #'
 #' @return `run`, with `warnings` attached, and `files` if anything was
 #'   written.
 #'
 #' @keywords internal
 #' @noRd
-mc_finish_run <- function(run, warned, out_dir, plots, dpi, plot_format,
-                          verbose) {
+mc_finish_run <- function(run, warned, out_dir, verbose) {
     run$warnings <- warned
     mc_replay_warnings(warned)
 
     if (!is.null(out_dir)) {
-        run <- mc_emit_output(
-            run, out_dir, warned, plots, dpi, plot_format, verbose
-        )
+        run <- mc_emit_output(run, out_dir, warned, verbose)
     }
     run
 }
@@ -142,26 +136,21 @@ mc_finish_run <- function(run, warned, out_dir, plots, dpi, plot_format,
 #' @param run The `mc_run` object.
 #' @param out_dir Directory to write into.
 #' @param warned Character vector of warnings raised during the run.
-#' @param plots Logical. Whether to draw per-taxon uncertainty.
-#' @param dpi Resolution for PNG output.
-#' @param plot_format One of `"pdf"`, `"png"` or `"both"`.
 #' @param verbose Logical. Whether to report what was written.
 #'
 #' @return `run`, with `files` listing everything written.
 #'
 #' @keywords internal
 #' @noRd
-mc_emit_output <- function(run, out_dir, warned, plots, dpi, plot_format,
-                            verbose) {
+mc_emit_output <- function(run, out_dir, warned, verbose) {
     say <- function(...) if (isTRUE(verbose)) message(...)
 
+    # Tables and the log only. The per-taxon uncertainty figures are not
+    # written: on a real study that is one image per taxon, and the interval
+    # behind every imputed value is already in imputed_uncertainty.tsv.
+    # mc_uncertainty() returns one taxon's intervals and mc_plot() draws a
+    # taxon on demand, for the cases where a picture is wanted.
     files <- mc_write_output(run, out_dir, warned)
-    if (isTRUE(plots)) {
-        files <- c(
-            files,
-            mc_write_uncertainty(run, out_dir, dpi, plot_format, say)
-        )
-    }
 
     run$files <- files
     say("Wrote ", length(files), " file(s) to ", out_dir, ": ",

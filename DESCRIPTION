@@ -45,7 +45,6 @@ Imports:
     fdapace,
     ggplot2,
     grDevices,
-    grid,
     magrittr,
     methods,
     mgcv,

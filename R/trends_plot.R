@@ -19,16 +19,14 @@
 #' @param obj An `mc_trends` or `mc_compare` object.
 #' @param out_dir Directory to write into. Figures go in a `plots`
 #'   subdirectory of it.
-#' @param dpi Resolution for PNG output.
-#' @param plot_format One of `"pdf"`, `"png"` or `"both"`.
+#' @param dpi Resolution of the images, in dots per inch.
 #' @param verbose Logical.
 #'
 #' @return Character vector of the paths written.
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_plots <- function(obj, out_dir, dpi = 300, plot_format = "pdf",
-                           verbose = TRUE) {
+mc_trend_plots <- function(obj, out_dir, dpi = 300, verbose = TRUE) {
     r <- obj$results
     hit <- r$taxon[!is.na(r$q_value) & r$q_value < obj$settings$alpha]
     if (length(hit) == 0) {
@@ -48,7 +46,7 @@ mc_trend_plots <- function(obj, out_dir, dpi = 300, plot_format = "pdf",
     for (tx in hit) {
         p <- tryCatch(mc_trend_panel(obj, tx), error = function(e) NULL)
         if (is.null(p)) next
-        paths <- c(paths, mc_trend_save(p, dir, tx, dpi, plot_format))
+        paths <- c(paths, mc_trend_save(p, dir, tx, dpi))
     }
     if (isTRUE(verbose)) {
         message("  drew ", length(hit), " figure(s)")
@@ -298,39 +296,27 @@ mc_trend_diff_panel <- function(obj, m, d) {
 }
 
 
-#' Write one figure in the requested format(s)
+#' Write one figure
 #'
 #' @param p The plot.
 #' @param dir Directory to write into.
 #' @param taxon The taxon's name, used for the file name.
-#' @param dpi Resolution for PNG output.
-#' @param plot_format One of `"pdf"`, `"png"` or `"both"`.
+#' @param dpi Resolution, in dots per inch.
 #'
-#' @return Character vector of the paths written.
+#' @return The path written.
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_save <- function(p, dir, taxon, dpi, plot_format) {
+mc_trend_save <- function(p, dir, taxon, dpi) {
     # A taxonomy string carries slashes, semicolons and spaces, none of
     # which belong in a file name.
     stem <- gsub("[^A-Za-z0-9._-]+", "_", taxon)
     stem <- substr(sub("^_+|_+$", "", stem), 1, 80)
     if (!nzchar(stem)) stem <- "taxon"
 
-    paths <- character(0)
-    if (plot_format %in% c("pdf", "both")) {
-        f <- file.path(dir, paste0(stem, ".pdf"))
-        grDevices::pdf(f, width = 7, height = 6)
-        print(p)
-        grDevices::dev.off()
-        paths <- c(paths, f)
-    }
-    if (plot_format %in% c("png", "both")) {
-        f <- file.path(dir, paste0(stem, ".png"))
-        grDevices::png(f, width = 7 * dpi, height = 6 * dpi, res = dpi)
-        print(p)
-        grDevices::dev.off()
-        paths <- c(paths, f)
-    }
-    paths
+    f <- file.path(dir, paste0(stem, ".png"))
+    grDevices::png(f, width = 7 * dpi, height = 6 * dpi, res = dpi)
+    print(p)
+    grDevices::dev.off()
+    f
 }

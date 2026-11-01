@@ -357,11 +357,10 @@ test_that("out_dir writes the completed table and a run log", {
         out_dir = out, C = 1, verbose = FALSE
     ))
 
-    # three tables, the uncertainty table, the log, and one uncertainty PDF
-    expect_length(run$files, 6)
+    # three tables, the uncertainty table, and the log
+    expect_length(run$files, 5)
     expect_true(any(grepl("imputed_uncertainty[.]tsv$", run$files)))
     expect_true(all(file.exists(run$files)))
-    expect_true(any(grepl("uncertainty_by_taxon[.]pdf$", run$files)))
 
     for (nm in c("imputed_clr", "imputed_relative_abundance",
                  "imputed_counts")) {
@@ -404,48 +403,32 @@ test_that("the log records label time points as the user wrote them", {
     unlink(out, recursive = TRUE)
 })
 
-test_that("uncertainty plotting can be turned off and switched to png", {
+test_that("a run writes tables and a log, and no figures", {
     s <- study(drop = list("M03", 7))
-    out <- file.path(tempdir(), "mc_plots_off")
+    out <- file.path(tempdir(), "mc_no_figures")
     unlink(out, recursive = TRUE)
 
-    off <- suppressWarnings(mc_run(
+    run <- suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
-        out_dir = out, plots = FALSE, C = 1, verbose = FALSE
+        out_dir = out, C = 1, verbose = FALSE
     ))
-    # The uncertainty table is written either way: plots = FALSE turns off the
-    # drawing, not the reporting.
-    expect_length(off$files, 5)
-    expect_true(any(grepl("imputed_uncertainty[.]tsv$", off$files)))
-    expect_false(any(grepl("uncertainty_by_taxon|uncertainty_png", off$files)))
+
+    # The interval behind every imputed value is reported, as a table. The
+    # per-taxon figures are not written: on a real study that is one image
+    # per taxon, and mc_uncertainty() or mc_plot() serves the cases where a
+    # picture of one taxon is wanted.
+    expect_true(any(grepl("imputed_uncertainty[.]tsv$", run$files)))
+    expect_false(any(grepl("[.]png$|[.]pdf$", run$files)))
+    expect_setequal(basename(run$files), c(
+        "imputed_clr.tsv", "imputed_relative_abundance.tsv",
+        "imputed_counts.tsv", "imputed_uncertainty.tsv",
+        "imputation_log.txt"
+    ))
+    # Nothing on disk either, not just nothing listed.
+    expect_setequal(list.files(out), basename(run$files))
+
     unlink(out, recursive = TRUE)
-
-    png_out <- file.path(tempdir(), "mc_plots_png")
-    unlink(png_out, recursive = TRUE)
-    both <- suppressWarnings(mc_run(
-        s$abundance, s$metadata,
-        sample_col = "sample", subject_col = "subject", time_col = "day",
-        out_dir = png_out, plot_format = "png", dpi = 150,
-        C = 1, verbose = FALSE
-    ))
-    # One page per taxon now, not one per imputed value.
-    pngs <- list.files(file.path(png_out, "uncertainty_png"), pattern = "png$")
-    expect_length(pngs, length(s$taxa))
-    unlink(png_out, recursive = TRUE)
-})
-
-test_that("dpi is validated", {
-    s <- study(drop = list("M03", 7))
-    expect_error(
-        mc_run(
-            s$abundance, s$metadata,
-            sample_col = "sample", subject_col = "subject",
-            time_col = "day", out_dir = tempdir(), dpi = -1,
-            C = 1, verbose = FALSE
-        ),
-        "dpi must be"
-    )
 })
 
 test_that("every imputed cell gets an interval, screened-out subjects too", {

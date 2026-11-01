@@ -18,9 +18,6 @@ mc_run(dat, ...)
   abundance_type = c("clr", "raw"),
   pseudocount = "auto",
   out_dir = NULL,
-  plots = TRUE,
-  dpi = 300,
-  plot_format = c("pdf", "png", "both"),
   C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
@@ -40,9 +37,6 @@ mc_run(dat, ...)
   abundance_type = c("clr", "raw"),
   pseudocount = "auto",
   out_dir = NULL,
-  plots = TRUE,
-  dpi = 300,
-  plot_format = c("pdf", "png", "both"),
   C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
@@ -95,21 +89,6 @@ completed table is written as \code{imputed_abundance.tsv} and a record
 of the run as \code{imputation_log.txt}, holding the time points in
 order, the counts of samples, subjects and time points, every
 subject-timepoint that was missing and why, and any warning raised.}
-
-\item{plots}{Logical. Whether to draw the uncertainty of the imputed
-values, one page per taxon, when \code{out_dir} is given. Default
-\code{TRUE}. Each page shows every value imputed for that taxon with
-its 95\\% analytic interval, so a taxon whose gaps rest on little
-information is visible rather than buried in the table.}
-
-\item{dpi}{Resolution of the PNG copies, in dots per inch. Default
-\code{300}. A PDF is vector art and is sharp at any magnification, so
-this does not apply to it.}
-
-\item{plot_format}{One of \code{"pdf"} (the default: every taxon on its
-own page of \code{uncertainty_by_taxon.pdf}), \code{"png"} (one file
-per taxon under \code{uncertainty_png/}, at \code{dpi}), or
-\code{"both"}.}
 
 \item{C}{Integer or \code{NULL}. Number of trajectory clusters, passed
 straight to \code{\link{mc_fit}}. \code{NULL} selects C per taxon by mean

@@ -91,8 +91,7 @@
 #' @param out_dir Directory to write the results table and log into, or
 #'   `NULL` to write nothing.
 #' @param plots Logical. Whether to draw one figure per significant taxon.
-#' @param dpi Resolution for PNG output.
-#' @param plot_format One of `"pdf"`, `"png"` or `"both"`.
+#' @param dpi Resolution of the per-taxon images, in dots per inch.
 #' @param n_cores Number of cores. Taxa are independent, so this splits by
 #'   taxon. Forking only; ignored on Windows.
 #' @param verbose Logical. Whether to report the resolved settings.
@@ -148,11 +147,9 @@ mc_trends <- function(abundance, metadata,
                       out_dir = NULL,
                       plots = FALSE,
                       dpi = 300,
-                      plot_format = c("pdf", "png", "both"),
                       n_cores = 1,
                       verbose = TRUE) {
     subject_effect <- match.arg(subject_effect)
-    plot_format <- match.arg(plot_format)
 
     mc_trend_run(
         abundance = abundance, metadata = metadata,
@@ -162,7 +159,7 @@ mc_trends <- function(abundance, metadata,
         covariates = covariates, k = k, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
         out_dir = out_dir, plots = plots, dpi = dpi,
-        plot_format = plot_format, n_cores = n_cores, verbose = verbose
+        n_cores = n_cores, verbose = verbose
     )
 }
 
@@ -285,11 +282,9 @@ mc_compare <- function(abundance, metadata,
                        out_dir = NULL,
                        plots = FALSE,
                        dpi = 300,
-                       plot_format = c("pdf", "png", "both"),
                        n_cores = 1,
                        verbose = TRUE) {
     subject_effect <- match.arg(subject_effect)
-    plot_format <- match.arg(plot_format)
 
     if (missing(group_col) || is.null(group_col)) {
         stop(
@@ -310,7 +305,7 @@ mc_compare <- function(abundance, metadata,
         covariates = covariates, k = k, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
         out_dir = out_dir, plots = plots, dpi = dpi,
-        plot_format = plot_format, n_cores = n_cores, verbose = verbose
+        n_cores = n_cores, verbose = verbose
     )
 }
 
@@ -331,8 +326,7 @@ mc_compare <- function(abundance, metadata,
 mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                          time_col, taxon_col, group_col, reference,
                          covariates, k, subject_effect, taxa, p_adjust,
-                         alpha, out_dir, plots, dpi, plot_format, n_cores,
-                         verbose) {
+                         alpha, out_dir, plots, dpi, n_cores, verbose) {
     say <- function(...) if (isTRUE(verbose)) message(...)
     mc_check_dpi(dpi)
 
@@ -449,9 +443,7 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                 call. = FALSE
             )
         } else {
-            files <- c(files, mc_trend_plots(
-                obj, out_dir, dpi, plot_format, verbose
-            ))
+            files <- c(files, mc_trend_plots(obj, out_dir, dpi, verbose))
         }
     }
     obj$files <- files

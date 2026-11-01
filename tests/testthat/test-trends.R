@@ -490,8 +490,8 @@ test_that("plots are drawn for significant taxa and need an out_dir", {
     cm <- mc_compare(tab, meta, "sample", "subject", "time",
         group_col = "arm", out_dir = dir, plots = TRUE, verbose = FALSE
     )
-    pdfs <- list.files(file.path(dir, "plots"), pattern = "\\.pdf$")
-    expect_identical(pdfs, "Diverges.pdf")
+    imgs <- list.files(file.path(dir, "plots"), pattern = "\\.png$")
+    expect_identical(imgs, "Diverges.png")
 
     expect_warning(
         mc_compare(tab, meta, "sample", "subject", "time",

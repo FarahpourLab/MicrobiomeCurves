@@ -205,18 +205,6 @@ mc_detect_missing <- function(
 #'   of the run as \code{imputation_log.txt}, holding the time points in
 #'   order, the counts of samples, subjects and time points, every
 #'   subject-timepoint that was missing and why, and any warning raised.
-#' @param plots Logical. Whether to draw the uncertainty of the imputed
-#'   values, one page per taxon, when \code{out_dir} is given. Default
-#'   \code{TRUE}. Each page shows every value imputed for that taxon with
-#'   its 95\% analytic interval, so a taxon whose gaps rest on little
-#'   information is visible rather than buried in the table.
-#' @param dpi Resolution of the PNG copies, in dots per inch. Default
-#'   \code{300}. A PDF is vector art and is sharp at any magnification, so
-#'   this does not apply to it.
-#' @param plot_format One of \code{"pdf"} (the default: every taxon on its
-#'   own page of \code{uncertainty_by_taxon.pdf}), \code{"png"} (one file
-#'   per taxon under \code{uncertainty_png/}, at \code{dpi}), or
-#'   \code{"both"}.
 #' @param C Integer or \code{NULL}. Number of trajectory clusters, passed
 #'   straight to \code{\link{mc_fit}}. \code{NULL} selects C per taxon by mean
 #'   silhouette width.
@@ -307,9 +295,6 @@ setMethod("mc_run", "data.frame", function(
     abundance_type = c("clr", "raw"),
     pseudocount = "auto",
     out_dir = NULL,
-    plots = TRUE,
-    dpi = 300,
-    plot_format = c("pdf", "png", "both"),
     C = NULL,
     cluster_method = c("fpca", "kmeans_fd"),
     use_outliers = TRUE,
@@ -323,7 +308,6 @@ setMethod("mc_run", "data.frame", function(
     mc_run_from_metadata(
         dat, metadata, sample_col, subject_col, time_col,
         match.arg(abundance_type), pseudocount, out_dir,
-        plots, dpi, match.arg(plot_format),
         C, match.arg(cluster_method), use_outliers, seed,
         min_observed, verbose, group_col
     )
@@ -340,9 +324,6 @@ setMethod("mc_run", "matrix", function(
     abundance_type = c("clr", "raw"),
     pseudocount = "auto",
     out_dir = NULL,
-    plots = TRUE,
-    dpi = 300,
-    plot_format = c("pdf", "png", "both"),
     C = NULL,
     cluster_method = c("fpca", "kmeans_fd"),
     use_outliers = TRUE,
@@ -359,7 +340,6 @@ setMethod("mc_run", "matrix", function(
     mc_run_from_metadata(
         dat, metadata, sample_col, subject_col, time_col,
         match.arg(abundance_type), pseudocount, out_dir,
-        plots, dpi, match.arg(plot_format),
         C, match.arg(cluster_method), use_outliers, seed,
         min_observed, verbose, group_col
     )

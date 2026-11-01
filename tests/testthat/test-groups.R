@@ -39,7 +39,7 @@ run_split <- function(d, ...) {
     suppressWarnings(mc_run(
         d$abundance, d$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "time", abundance_type = "clr",
-        group_col = "arm", plots = FALSE, verbose = FALSE, ...
+        group_col = "arm", verbose = FALSE, ...
     ))
 }
 
@@ -49,7 +49,7 @@ run_one_arm <- function(d, arm) {
         d$abundance[, colnames(d$abundance) %in% keep, drop = FALSE],
         d$metadata[d$metadata$sample %in% keep, ],
         sample_col = "sample", subject_col = "subject", time_col = "time",
-        abundance_type = "clr", out_dir = NULL, plots = FALSE,
+        abundance_type = "clr", out_dir = NULL,
         verbose = FALSE
     ))
 }
@@ -77,7 +77,7 @@ test_that("splitting changes the answer, so it is not a no-op", {
     pooled <- suppressWarnings(mc_run(
         d$abundance, d$metadata, sample_col = "sample",
         subject_col = "subject", time_col = "time", abundance_type = "clr",
-        out_dir = NULL, plots = FALSE, verbose = FALSE
+        out_dir = NULL, verbose = FALSE
     ))
     pooled <- sorted(pooled$imputed)
 
@@ -135,7 +135,7 @@ test_that("the group column has to exist and be complete", {
             d$abundance, d$metadata, sample_col = "sample",
             subject_col = "subject", time_col = "time",
             abundance_type = "clr", group_col = "nope",
-            out_dir = NULL, plots = FALSE, verbose = FALSE
+            out_dir = NULL, verbose = FALSE
         )),
         "not in the metadata"
     )
