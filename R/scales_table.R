@@ -107,11 +107,13 @@ mc_raw_scale_info <- function(abundance, design) {
     depths <- colSums(mat, na.rm = TRUE)
     depths[colSums(!is.na(mat)) == 0] <- NA_real_
 
-    # The CLR step replaced each zero with 0.65 of the smallest positive
-    # value in its own sample, then took proportions of the total after
-    # that replacement. So on the proportion scale a replaced zero sits at
-    # 0.65 of where the rarest real taxon sits. The threshold goes between
-    # the two, which separates them exactly rather than nearly.
+    # The CLR step replaced each zero with mc_zero_mult of the smallest
+    # positive value in its own sample, then took proportions of the total
+    # after that replacement. So on the proportion scale a replaced zero
+    # sits at mc_zero_mult of where the rarest real taxon sits. The
+    # threshold goes midway between the two, which separates them exactly
+    # rather than nearly.
+    mid <- (1 + mc_zero_mult) / 2
     pseudo <- vapply(seq_len(ncol(mat)), function(j) {
         x <- mat[, j]
         pos <- x[!is.na(x) & x > 0]
@@ -119,8 +121,8 @@ mc_raw_scale_info <- function(abundance, design) {
             return(NA_real_)
         }
         n_zero <- sum(!is.na(x) & x == 0)
-        total <- depths[j] + n_zero * min(pos) * 0.65
-        (min(pos) * 0.825) / total
+        total <- depths[j] + n_zero * min(pos) * mc_zero_mult
+        (min(pos) * mid) / total
     }, numeric(1))
     names(pseudo) <- colnames(mat)
 

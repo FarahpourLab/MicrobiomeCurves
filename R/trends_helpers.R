@@ -121,7 +121,9 @@ mc_trend_design <- function(metadata, sample_col, subject_col, time_col,
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_matrix <- function(abundance, taxon_col = NULL, taxa = NULL) {
+mc_trend_matrix <- function(abundance, taxon_col = NULL, taxa = NULL,
+                            normalization = "NONE", transform = "NONE",
+                            pseudocount = "auto") {
     if (is.matrix(abundance)) {
         if (is.null(rownames(abundance))) {
             stop(
@@ -166,6 +168,13 @@ mc_trend_matrix <- function(abundance, taxon_col = NULL, taxa = NULL) {
 
     storage.mode(mat) <- "numeric"
     rownames(mat) <- labs
+
+    # Before the taxa subset, never after. TSS divides by the sample's total
+    # over every taxon and CLR centres on the geometric mean over every
+    # taxon, so both are properties of the whole composition. Scaling four
+    # selected taxa as though they were the whole sample would answer a
+    # question the caller did not ask.
+    mat <- mc_trend_scale(mat, normalization, transform, pseudocount)
 
     if (!is.null(taxa)) {
         gone <- setdiff(taxa, labs)

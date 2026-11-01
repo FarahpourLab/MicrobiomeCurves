@@ -9,6 +9,25 @@
 # replaced first. The default is the standard multiplicative replacement by a
 # small fraction of the smallest observed non-zero value in the sample.
 
+
+#' The multiplier behind pseudocount = "auto"
+#'
+#' @description
+#' The recommended multiplicative replacement for rounded zeros in
+#' compositional data: 0.65 of the detection limit, taken here as the
+#' smallest positive value in the sample, after Martin-Fernandez,
+#' Barcelo-Vidal and Pawlowsky-Glahn (2003) and the default in
+#' `zCompositions::multRepl()`.
+#'
+#' It is named because three places depend on it. [mc_clr()] applies it,
+#' `mc_raw_scale_info()` undoes it to work out which imputed values belong
+#' below the detection limit, and [mc_trends()] reports it. A literal in
+#' each would let them drift apart.
+#'
+#' @keywords internal
+#' @noRd
+mc_zero_mult <- 0.65
+
 #' Transform an abundance matrix to centred log-ratios
 #'
 #' @param mat Numeric matrix, taxa in rows and samples in columns.
@@ -27,7 +46,8 @@ mc_clr <- function(mat, pseudocount = "auto") {
         stop(
             "abundance holds negative values, so it cannot be counts or ",
             "relative abundances. If it is already CLR-transformed, pass ",
-            "abundance_type = \"clr\".",
+            "abundance_type = \"clr\" to mc_run(), or ",
+            "normalization = \"NONE\" to mc_trends().",
             call. = FALSE
         )
     }
@@ -81,7 +101,7 @@ mc_replace_zeros <- function(x, pseudocount) {
 
     # The usual multiplicative replacement: below anything observed, but on
     # the same scale, so the transformed zeros do not dominate the sample.
-    x[!is.na(x) & x == 0] <- min(pos) * 0.65
+    x[!is.na(x) & x == 0] <- min(pos) * mc_zero_mult
     x
 }
 

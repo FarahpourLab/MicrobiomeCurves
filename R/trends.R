@@ -77,6 +77,27 @@
 #' @param time_col Column of `metadata` holding numeric time.
 #' @param taxon_col Column of `abundance` holding the taxon names. `NULL`
 #'   takes the first column that does not hold numbers.
+#' @param normalization What to do to each sample before fitting. `"NONE"`
+#'   leaves the table alone and is the default, because `mc_run()`'s
+#'   `completed` table is already on the centred log ratio scale. `"TSS"`
+#'   divides each sample by its total. `"CLR"` takes centred log ratios by
+#'   the same step `mc_run(abundance_type = "raw")` applies, so an
+#'   untransformed abundance table can be tested directly and a trend test
+#'   agrees value for value with an imputation of that table. Applied to the whole table before
+#'   `taxa` selects from it, since both normalisations are properties of
+#'   the sample as a whole. The names follow MaAsLin 2.
+#' @param transform What to do to each value after normalisation. `"NONE"`
+#'   is the default and leaves the values alone. The others are `"LOG"`
+#'   (log2, with zeros replaced by half the smallest positive value the
+#'   taxon reaches), `"LOGIT"`, and `"AST"`, the arcsine square root.
+#'   `"CLR"` normalisation leaves values on the whole real line, so it
+#'   accepts only `"NONE"`; any other pairing stops the call.
+#' @param pseudocount Used only by `normalization = "CLR"`, and meaning
+#'   exactly what it means in [mc_run()]: `"auto"` replaces each zero with
+#'   0.65 of the smallest positive value in its own sample, and a number is
+#'   added to every entry instead. `transform = "LOG"` does not read it, so
+#'   that `"TSS"` with `"LOG"` reproduces MaAsLin 2's own rule of half the
+#'   smallest positive value in the taxon.
 #' @param covariates Character vector of `metadata` columns to adjust for.
 #'   They enter as parametric terms, shifting the curve without a shape of
 #'   their own, and no test is reported for them.
@@ -138,6 +159,9 @@
 mc_trends <- function(abundance, metadata,
                       sample_col, subject_col, time_col,
                       taxon_col = NULL,
+                      normalization = c("NONE", "TSS", "CLR"),
+                      transform = c("NONE", "LOG", "LOGIT", "AST"),
+                      pseudocount = "auto",
                       covariates = NULL,
                       k = NULL,
                       subject_effect = c("intercept", "slope", "smooth", "none"),
@@ -150,11 +174,15 @@ mc_trends <- function(abundance, metadata,
                       n_cores = 1,
                       verbose = TRUE) {
     subject_effect <- match.arg(subject_effect)
+    normalization <- match.arg(normalization)
+    transform <- match.arg(transform)
 
     mc_trend_run(
         abundance = abundance, metadata = metadata,
         sample_col = sample_col, subject_col = subject_col,
         time_col = time_col, taxon_col = taxon_col,
+        normalization = normalization, transform = transform,
+        pseudocount = pseudocount,
         group_col = NULL, reference = NULL,
         covariates = covariates, k = k, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
@@ -273,6 +301,9 @@ mc_compare <- function(abundance, metadata,
                        group_col,
                        reference = NULL,
                        taxon_col = NULL,
+                       normalization = c("NONE", "TSS", "CLR"),
+                       transform = c("NONE", "LOG", "LOGIT", "AST"),
+                       pseudocount = "auto",
                        covariates = NULL,
                        k = NULL,
                        subject_effect = c("intercept", "slope", "smooth", "none"),
@@ -285,6 +316,8 @@ mc_compare <- function(abundance, metadata,
                        n_cores = 1,
                        verbose = TRUE) {
     subject_effect <- match.arg(subject_effect)
+    normalization <- match.arg(normalization)
+    transform <- match.arg(transform)
 
     if (missing(group_col) || is.null(group_col)) {
         stop(
@@ -301,6 +334,8 @@ mc_compare <- function(abundance, metadata,
         abundance = abundance, metadata = metadata,
         sample_col = sample_col, subject_col = subject_col,
         time_col = time_col, taxon_col = taxon_col,
+        normalization = normalization, transform = transform,
+        pseudocount = pseudocount,
         group_col = group_col, reference = reference,
         covariates = covariates, k = k, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
@@ -324,7 +359,8 @@ mc_compare <- function(abundance, metadata,
 #' @keywords internal
 #' @noRd
 mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
-                         time_col, taxon_col, group_col, reference,
+                         time_col, taxon_col, normalization, transform,
+                         pseudocount, group_col, reference,
                          covariates, k, subject_effect, taxa, p_adjust,
                          alpha, out_dir, plots, dpi, n_cores, verbose) {
     say <- function(...) if (isTRUE(verbose)) message(...)
@@ -333,7 +369,10 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
     design <- mc_trend_design(
         metadata, sample_col, subject_col, time_col, group_col, covariates
     )
-    tm <- mc_trend_matrix(abundance, taxon_col, taxa)
+    tm <- mc_trend_matrix(
+        abundance, taxon_col, taxa,
+        normalization, transform, pseudocount
+    )
     al <- mc_trend_align(design, tm$mat, verbose)
     design <- al$design
     mat <- al$mat
@@ -364,6 +403,15 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
     )
     say("  k              : ", k, if (is.null(k)) "" else "")
     say("  subject effect : ", subject_effect)
+    # Reported only when something was applied. Silence is the default case
+    # and saying so on every run would bury the lines that vary.
+    if (!identical(normalization, "NONE") || !identical(transform, "NONE")) {
+        for (ln in mc_trend_scale_lines(
+            normalization, transform, pseudocount
+        )) {
+            say(ln)
+        }
+    }
     if (length(covariates) > 0) {
         say("  covariates     : ", mc_fmt_some(covariates))
     }
@@ -417,6 +465,8 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
             settings = list(
                 k = k, subject_effect = subject_effect,
                 covariates = covariates, group_col = group_col,
+                normalization = normalization, transform = transform,
+                pseudocount = pseudocount,
                 reference = grp$reference, group = grp$group,
                 levels = grp$levels, alpha = alpha, p_adjust = p_adjust,
                 sample_col = sample_col, subject_col = subject_col,
@@ -485,6 +535,9 @@ mc_trend_log_lines <- function(obj, n_tax, n_fail, n_hit) {
         paste0("  subjects    : ", length(unique(d$subject))),
         paste0("  time points : ", length(unique(d$time))),
         paste0("  time range  : ", min(d$time), " to ", max(d$time)),
+        "",
+        "INPUT SCALE",
+        mc_trend_scale_lines(s$normalization, s$transform, s$pseudocount),
         "",
         "MODEL",
         paste0("  value ~ ", paste(terms, collapse = " + ")),
@@ -607,6 +660,15 @@ mc_trend_print <- function(x, what) {
         " subject effect\n",
         sep = ""
     )
+    # Silent when the table was fitted as supplied, which is the default and
+    # the usual case. Reported whenever it was not, since the same taxon on
+    # two scales is two different results.
+    if (!identical(s$normalization, "NONE") ||
+        !identical(s$transform, "NONE")) {
+        cat("  input scale  : ", s$normalization, " + ", s$transform, "\n",
+            sep = ""
+        )
+    }
     if (!is.null(s$group_col)) {
         cat("  group        : ", s$group_col, " (", length(s$levels),
             " levels), reference ", s$reference, "\n",

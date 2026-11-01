@@ -11,6 +11,9 @@ mc_trends(
   subject_col,
   time_col,
   taxon_col = NULL,
+  normalization = c("NONE", "TSS", "CLR"),
+  transform = c("NONE", "LOG", "LOGIT", "AST"),
+  pseudocount = "auto",
   covariates = NULL,
   k = NULL,
   subject_effect = c("intercept", "slope", "smooth", "none"),
@@ -44,6 +47,30 @@ came from.}
 
 \item{taxon_col}{Column of \code{abundance} holding the taxon names. \code{NULL}
 takes the first column that does not hold numbers.}
+
+\item{normalization}{What to do to each sample before fitting. \code{"NONE"}
+leaves the table alone and is the default, because \code{mc_run()}'s
+\code{completed} table is already on the centred log ratio scale. \code{"TSS"}
+divides each sample by its total. \code{"CLR"} takes centred log ratios by
+the same step \code{mc_run(abundance_type = "raw")} applies, so an
+untransformed abundance table can be tested directly and a trend test
+agrees value for value with an imputation of that table. Applied to the whole table before
+\code{taxa} selects from it, since both normalisations are properties of
+the sample as a whole. The names follow MaAsLin 2.}
+
+\item{transform}{What to do to each value after normalisation. \code{"NONE"}
+is the default and leaves the values alone. The others are \code{"LOG"}
+(log2, with zeros replaced by half the smallest positive value the
+taxon reaches), \code{"LOGIT"}, and \code{"AST"}, the arcsine square root.
+\code{"CLR"} normalisation leaves values on the whole real line, so it
+accepts only \code{"NONE"}; any other pairing stops the call.}
+
+\item{pseudocount}{Used only by \code{normalization = "CLR"}, and meaning
+exactly what it means in \code{\link[=mc_run]{mc_run()}}: \code{"auto"} replaces each zero with
+0.65 of the smallest positive value in its own sample, and a number is
+added to every entry instead. \code{transform = "LOG"} does not read it, so
+that \code{"TSS"} with \code{"LOG"} reproduces MaAsLin 2's own rule of half the
+smallest positive value in the taxon.}
 
 \item{covariates}{Character vector of \code{metadata} columns to adjust for.
 They enter as parametric terms, shifting the curve without a shape of
