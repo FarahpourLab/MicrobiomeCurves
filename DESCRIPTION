@@ -48,6 +48,8 @@ Imports:
     grid,
     magrittr,
     methods,
+    mgcv,
+    parallel,
     patchwork,
     S4Vectors,
     stats,

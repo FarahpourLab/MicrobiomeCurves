@@ -1,0 +1,531 @@
+# mc_trends() and mc_compare().
+#
+# The model is mgcv's, so these do not re-test GAM fitting. What is tested is
+# that the right model is built, that the two parameterisations behave as
+# documented, that an input the function cannot honour is refused rather than
+# guessed at, and that the result tables are shaped as promised.
+
+mc_td <- function(n_sub = 12, n_t = 6, arms = 2) {
+    d <- expand.grid(
+        time = seq_len(n_t), subject = paste0("S", seq_len(n_sub)),
+        stringsAsFactors = FALSE
+    )
+    d <- d[order(d$subject, d$time), ]
+    d$sample <- paste0(d$subject, "_T", d$time)
+    per <- ceiling(n_sub / arms)
+    idx <- ceiling(as.integer(sub("^S", "", d$subject)) / per)
+    d$arm <- paste0("arm", LETTERS[pmin(idx, arms)])
+    d$sex <- ifelse(
+        as.integer(sub("^S", "", d$subject)) %% 2 == 0, "F", "M"
+    )
+    rownames(d) <- NULL
+    d
+}
+
+mc_tt <- function(meta, effects, seed = 1) {
+    withr::with_seed(seed, {
+        m <- matrix(
+            stats::rnorm(length(effects) * nrow(meta), sd = 0.3),
+            nrow = length(effects),
+            dimnames = list(names(effects), meta$sample)
+        )
+        for (nm in names(effects)) m[nm, ] <- m[nm, ] + effects[[nm]](meta)
+        data.frame(taxon = rownames(m), m, check.names = FALSE)
+    })
+}
+
+test_that("a taxon that rises is found and a flat one is not", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Rising = function(d) 0.8 * d$time,
+        Flat = function(d) 0
+    ))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+
+    expect_s3_class(tr, "mc_trends")
+    expect_equal(nrow(tr$results), 2L)
+    expect_true(all(tr$results$converged))
+
+    p <- stats::setNames(tr$results$p_value, tr$results$taxon)
+    expect_lt(p[["Rising"]], 0.01)
+    expect_gt(p[["Flat"]], 0.05)
+})
+
+test_that("mc_compare finds a taxon whose arms diverge", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Diverges = function(d) ifelse(d$arm == "armB", 0.9 * d$time, 0),
+        Parallel = function(d) ifelse(d$arm == "armB", 2, 0)
+    ))
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", verbose = FALSE
+    )
+
+    expect_s3_class(cm, "mc_compare")
+    p <- stats::setNames(cm$results$p_value, cm$results$taxon)
+    # Parallel differs in level, not in shape, so the shape test should not
+    # fire on it. Diverges differs in shape and should.
+    expect_lt(p[["Diverges"]], 0.01)
+    expect_gt(p[["Parallel"]], 0.05)
+})
+
+test_that("two groups use the ordered parameterisation and name a level", {
+    meta <- mc_td(arms = 2)
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", verbose = FALSE
+    )
+    expect_identical(cm$settings$group, "ordered")
+    expect_identical(cm$settings$reference, "armA")
+    expect_identical(cm$results$reference[1], "armA")
+    expect_identical(cm$results$n_groups[1], 2L)
+})
+
+test_that("three groups default to the global parameterisation", {
+    meta <- mc_td(n_sub = 18, arms = 3)
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", verbose = FALSE
+    )
+    expect_identical(cm$settings$group, "global")
+    expect_identical(cm$settings$reference, "global")
+    expect_identical(cm$results$n_groups[1], 3L)
+})
+
+test_that("reference picks the parameterisation and is validated", {
+    meta <- mc_td(n_sub = 18, arms = 3)
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", reference = "armC", verbose = FALSE
+    )
+    expect_identical(cm$settings$group, "ordered")
+    expect_identical(cm$settings$reference, "armC")
+    expect_identical(cm$settings$levels[1], "armC")
+
+    expect_error(
+        mc_compare(tab, meta, "sample", "subject", "time",
+            group_col = "arm", reference = "armZ", verbose = FALSE
+        ),
+        "available"
+    )
+})
+
+test_that("with 3 groups the test is the omnibus, whatever the reference", {
+    # Three arms, and the one that diverges is NOT the first level after the
+    # reference. The ordered parameterisation then holds two difference
+    # smooths, and reading only the first would miss this taxon entirely.
+    meta <- mc_td(n_sub = 18, arms = 3)
+    meta$arm <- c("control", "dose_low", "dose_high")[
+        match(meta$arm, c("armA", "armB", "armC"))
+    ]
+    tab <- mc_tt(meta, list(
+        LowDiverges = function(d) ifelse(d$arm == "dose_low", 1.2 * d$time, 0),
+        AllSame = function(d) 0.4 * d$time
+    ))
+
+    # levels sort to control, dose_high, dose_low, so dose_high is the first
+    # difference smooth and dose_low the second.
+    ref <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", reference = "control", verbose = FALSE
+    )
+    glo <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", reference = "global", verbose = FALSE
+    )
+
+    for (cm in list(ref, glo)) {
+        p <- stats::setNames(cm$results$p_value, cm$results$taxon)
+        expect_lt(p[["LowDiverges"]], 0.01)
+        expect_gt(p[["AllSame"]], 0.05)
+    }
+
+    # Both parameterisations answer the same omnibus question, so they should
+    # agree on which taxa are flagged even though the fits differ.
+    expect_identical(
+        ref$results$taxon[ref$results$q_value < 0.05],
+        glo$results$taxon[glo$results$q_value < 0.05]
+    )
+})
+
+test_that("the log says which test was used", {
+    meta3 <- mc_td(n_sub = 18, arms = 3)
+    meta2 <- mc_td(arms = 2)
+    tab3 <- mc_tt(meta3, list(X = function(d) 0.5 * d$time))
+    tab2 <- mc_tt(meta2, list(X = function(d) 0.5 * d$time))
+    dir <- withr::local_tempdir()
+
+    mc_compare(tab2, meta2, "sample", "subject", "time",
+        group_col = "arm", out_dir = file.path(dir, "two"), verbose = FALSE
+    )
+    mc_compare(tab3, meta3, "sample", "subject", "time",
+        group_col = "arm", reference = "armA",
+        out_dir = file.path(dir, "three"), verbose = FALSE
+    )
+
+    two <- readLines(file.path(dir, "two", "compare_log.txt"))
+    three <- readLines(file.path(dir, "three", "compare_log.txt"))
+    expect_true(any(grepl("difference smooth", two, fixed = TRUE)))
+    # Three groups take the omnibus even with a named reference.
+    expect_true(any(grepl("omnibus", three, fixed = TRUE)))
+})
+
+test_that("mc_compare requires group_col", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    expect_error(
+        mc_compare(tab, meta, "sample", "subject", "time", verbose = FALSE),
+        "group_col is required"
+    )
+    expect_error(
+        mc_compare(tab, meta, "sample", "subject", "time",
+            group_col = "nope", verbose = FALSE
+        ),
+        "no column"
+    )
+})
+
+test_that("a non-numeric time column is refused, not coerced", {
+    meta <- mc_td()
+    meta$label <- paste0("week_", meta$time)
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    expect_error(
+        mc_trends(tab, meta, "sample", "subject", "label", verbose = FALSE),
+        "not numeric"
+    )
+})
+
+test_that("k is read from the design and bounded by it", {
+    meta <- mc_td(n_t = 5)
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    # 5 distinct times, so min(5 - 1, 10).
+    expect_identical(tr$settings$k, 4L)
+
+    expect_error(
+        mc_trends(tab, meta, "sample", "subject", "time",
+            k = 9, verbose = FALSE
+        ),
+        "exceeds"
+    )
+    expect_error(
+        mc_trends(tab, meta, "sample", "subject", "time",
+            k = 2, verbose = FALSE
+        ),
+        "at least 3"
+    )
+})
+
+test_that("NA values are dropped rather than failing the fit", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+    gap <- tab
+    gap[1, c("S3_T2", "S7_T4", "S11_T5")] <- NA
+
+    full <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    part <- mc_trends(gap, meta, "sample", "subject", "time", verbose = FALSE)
+
+    expect_true(part$results$converged[1])
+    expect_identical(part$results$n_obs[1], full$results$n_obs[1] - 3L)
+    # The same taxon, three cells fewer: the answer should move a little and
+    # not change in kind.
+    expect_lt(part$results$p_value[1], 0.01)
+})
+
+test_that("each subject_effect builds the documented terms", {
+    expect_identical(
+        mc_trend_terms(5, "intercept"),
+        c("s(time, k = 5)", "s(subject, bs = \"re\")")
+    )
+    expect_identical(
+        mc_trend_terms(5, "slope"),
+        c(
+            "s(time, k = 5)", "s(subject, bs = \"re\")",
+            "s(subject, time, bs = \"re\")"
+        )
+    )
+    expect_identical(
+        mc_trend_terms(5, "smooth"),
+        c("s(time, k = 5)", "s(time, subject, bs = \"fs\", k = 5, m = 1)")
+    )
+    expect_identical(mc_trend_terms(5, "none"), "s(time, k = 5)")
+
+    # The null model for the nested comparison drops only the group smooth.
+    expect_false(any(grepl(
+        "by = mc_grp",
+        mc_trend_terms(5, "intercept", group = "global", group_smooth = FALSE)
+    )))
+    expect_true(any(grepl(
+        "by = mc_grp",
+        mc_trend_terms(5, "intercept", group = "global", group_smooth = TRUE)
+    )))
+})
+
+test_that("every subject_effect runs and covariates are accepted", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    for (se in c("intercept", "slope", "smooth", "none")) {
+        tr <- mc_trends(tab, meta, "sample", "subject", "time",
+            subject_effect = se, verbose = FALSE
+        )
+        expect_true(tr$results$converged[1], label = se)
+        expect_identical(tr$settings$subject_effect, se)
+    }
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        covariates = "sex", verbose = FALSE
+    )
+    expect_true(tr$results$converged[1])
+    expect_identical(tr$settings$covariates, "sex")
+})
+
+test_that("a covariate using a reserved name is refused", {
+    meta <- mc_td()
+    meta$value <- 1
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    expect_error(
+        mc_trends(tab, meta, "sample", "subject", "time",
+            covariates = "value", verbose = FALSE
+        ),
+        "used"
+    )
+})
+
+test_that("smooth subject curves warn when group cannot vary within subject", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.5 * d$time))
+
+    expect_warning(
+        mc_compare(tab, meta, "sample", "subject", "time",
+            group_col = "arm", subject_effect = "smooth", verbose = FALSE
+        ),
+        "absorb"
+    )
+})
+
+test_that("only the shared samples are used", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+    tab$extra_sample <- stats::rnorm(nrow(tab))
+    meta2 <- meta[meta$sample != "S1_T1", ]
+
+    tr <- mc_trends(tab, meta2, "sample", "subject", "time", verbose = FALSE)
+    expect_identical(tr$results$n_obs[1], nrow(meta2))
+    expect_identical(nrow(tr$design), nrow(meta2))
+
+    expect_error(
+        mc_trends(tab, transform(meta, sample = paste0("z", meta$sample)),
+            "sample", "subject", "time", verbose = FALSE
+        ),
+        "No sample name is in both"
+    )
+})
+
+test_that("a failed taxon gets a row rather than stopping the run", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Good = function(d) 0.8 * d$time,
+        Constant = function(d) 0
+    ))
+    tab[tab$taxon == "Constant", -1] <- 7
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    expect_identical(nrow(tr$results), 2L)
+    row <- tr$results[tr$results$taxon == "Constant", ]
+    expect_false(row$converged)
+    expect_true(is.na(row$p_value))
+    expect_identical(row$note, "constant")
+})
+
+test_that("adjustment is over the taxa that were actually tested", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        A = function(d) 0.8 * d$time,
+        B = function(d) 0.6 * d$time,
+        Bad = function(d) 0
+    ))
+    tab[tab$taxon == "Bad", -1] <- 1
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    ok <- tr$results[tr$results$converged, ]
+    expect_identical(nrow(ok), 2L)
+    # Two tests were carried out, so BH multiplies the smaller p by 2, not 3.
+    expect_equal(
+        sort(ok$q_value),
+        sort(stats::p.adjust(ok$p_value, "BH")),
+        tolerance = 1e-12
+    )
+    expect_true(is.na(tr$results$q_value[tr$results$taxon == "Bad"]))
+})
+
+test_that("results carry the promised columns in the promised order", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    expect_identical(
+        names(tr$results),
+        c(
+            "taxon", "edf", "F", "p_value", "q_value",
+            "n_obs", "n_subjects", "converged", "note"
+        )
+    )
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", verbose = FALSE
+    )
+    expect_identical(
+        names(cm$results),
+        c(
+            "taxon", "edf", "F", "p_value", "q_value",
+            "n_obs", "n_subjects", "converged", "note",
+            "n_groups", "reference"
+        )
+    )
+})
+
+test_that("results are ordered by adjusted p-value", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Weak = function(d) 0.15 * d$time,
+        Strong = function(d) 1.5 * d$time,
+        Flat = function(d) 0
+    ))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    expect_identical(tr$results$taxon[1], "Strong")
+    q <- tr$results$q_value[!is.na(tr$results$q_value)]
+    expect_identical(q, sort(q))
+})
+
+test_that("taxa selects a subset and rejects a name that is not there", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        A = function(d) 0.8 * d$time,
+        B = function(d) 0.5 * d$time
+    ))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        taxa = "B", verbose = FALSE
+    )
+    expect_identical(tr$results$taxon, "B")
+
+    expect_error(
+        mc_trends(tab, meta, "sample", "subject", "time",
+            taxa = "C", verbose = FALSE
+        ),
+        "no row"
+    )
+})
+
+test_that("a matrix input works and the taxon column is found either way", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+    m <- as.matrix(tab[, -1, drop = FALSE])
+    rownames(m) <- tab$taxon
+
+    from_df <- mc_trends(tab, meta, "sample", "subject", "time",
+        verbose = FALSE
+    )
+    from_mat <- mc_trends(m, meta, "sample", "subject", "time",
+        verbose = FALSE
+    )
+    expect_equal(from_df$results, from_mat$results)
+
+    named <- tab
+    names(named)[1] <- "OTU_ID"
+    from_named <- mc_trends(named, meta, "sample", "subject", "time",
+        taxon_col = "OTU_ID", verbose = FALSE
+    )
+    expect_equal(from_df$results, from_named$results)
+})
+
+test_that("out_dir writes the table and a log naming the model", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+    dir <- withr::local_tempdir()
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        out_dir = dir, verbose = FALSE
+    )
+    expect_setequal(
+        basename(tr$files), c("trends.tsv", "trends_log.txt")
+    )
+    back <- utils::read.delim(
+        file.path(dir, "trends.tsv"),
+        check.names = FALSE
+    )
+    expect_identical(back$taxon, tr$results$taxon)
+
+    log <- readLines(file.path(dir, "trends_log.txt"))
+    expect_true(any(grepl("value ~ s(time, k =", log, fixed = TRUE)))
+    expect_true(any(grepl("REML", log, fixed = TRUE)))
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", out_dir = dir, verbose = FALSE
+    )
+    expect_setequal(
+        basename(cm$files), c("compare.tsv", "compare_log.txt")
+    )
+    clog <- readLines(file.path(dir, "compare_log.txt"))
+    expect_true(any(grepl("reference", clog, fixed = TRUE)))
+    expect_true(any(grepl("approximate", clog, fixed = TRUE)))
+})
+
+test_that("plots are drawn for significant taxa and need an out_dir", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Diverges = function(d) ifelse(d$arm == "armB", 1.2 * d$time, 0)
+    ))
+    dir <- withr::local_tempdir()
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", out_dir = dir, plots = TRUE, verbose = FALSE
+    )
+    pdfs <- list.files(file.path(dir, "plots"), pattern = "\\.pdf$")
+    expect_identical(pdfs, "Diverges.pdf")
+
+    expect_warning(
+        mc_compare(tab, meta, "sample", "subject", "time",
+            group_col = "arm", plots = TRUE, verbose = FALSE
+        ),
+        "needs an out_dir"
+    )
+})
+
+test_that("a refit reproduces the fit the run reported", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    again <- mc_trend_refit(tr, "X")
+
+    # Models are not stored, so the figures and any follow-up refit. That is
+    # only sound if the refit is the same fit: gam() with REML uses no RNG.
+    st <- summary(again$fit)$s.table
+    expect_equal(unname(st["s(time)", "edf"]), tr$results$edf[1],
+        tolerance = 1e-10
+    )
+    expect_equal(
+        unname(st["s(time)", ncol(st)]), tr$results$p_value[1],
+        tolerance = 1e-10
+    )
+})
+
+test_that("the result keeps the data but not the models", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    expect_null(tr$models)
+    expect_identical(nrow(tr$design), nrow(meta))
+    expect_identical(dim(tr$abundance), c(1L, nrow(meta)))
+})
