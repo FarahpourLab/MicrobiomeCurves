@@ -3,6 +3,12 @@
 # These values pin the numbers the imputation returns for a fixed input,
 # mask and seed.
 #
+# They were regenerated on 2026-11-01, when the bundled example became the
+# BONUS cystic-fibrosis infant cohort instead of a simulated table. The
+# numbers belong to the data, so changing the data changes them; the method
+# did not change at that point. The fixture is the corner of the cohort cut
+# out in helper-fixtures.R, and these constants follow that slice.
+#
 # They were regenerated on 2026-10-12, when the estimator changed. Until then
 # the package recomputed each subject's FPC scores with its own BLUP algebra;
 # it now reads the scores fdapace itself used, from fp$xiEst, so the value is
@@ -23,15 +29,16 @@
 
 test_that("imputed values for a fixed mask and seed have not changed", {
     expected_imputed <- c(
-        -0.437956505400, -0.137865898166, 1.046200699461, -1.592710695464,
-        1.387937360709, 0.811784415369, 0.849457710695, -1.835141107832,
-        -1.048613426028, -0.506314640002, -0.550506957222, -0.930188319748
+        7.370499197031, 2.881398916472, 3.938329486083, 3.871585053887
     )
 
     fit <- quiet_fit(demo_prep(), C = 1, use_outliers = TRUE, seed = 123)
     got <- mc_impute(fit)
 
-    expect_equal(got$species, sprintf("Taxon%02d", 1:12))
+    # One row per taxon of the fixture, in the fixture's own order. The
+    # identifiers are full lineages, so they are taken from the table
+    # rather than written out.
+    expect_equal(got$species, taxa_demo$OTU_ID)
     expect_equal(got$imputed_value, expected_imputed, tolerance = 1e-6)
 })
 
@@ -39,7 +46,8 @@ test_that("the true values recovered at the masked cell are the input values", {
     fit <- quiet_fit(demo_prep(), C = 1, seed = 123)
     got <- mc_impute(fit)
 
-    expect_equal(got$true_value, taxa_demo[["S01.3"]], tolerance = 1e-12)
+    cell <- paste0(demo_masked_cell$rep, ".", demo_masked_cell$time)
+    expect_equal(got$true_value, taxa_demo[[cell]], tolerance = 1e-12)
 })
 
 test_that("squared error is consistent with true and imputed values", {
@@ -65,12 +73,12 @@ test_that("mc_run output for the bundled data has not changed", {
 
     expect_equal(
         head(run$imputed$imputed_value, 6),
-        c(0.692609755148, 0.565286316687, -0.688724509638,
-            0.898977142979, 0.845289225360, -0.973382366093),
+        c(2.945243495916, 1.064910304993, 1.561876299086,
+            1.016944360361, 6.122990793884, 5.960239421056),
         tolerance = 1e-6
     )
     expect_equal(
-        sum(run$imputed$imputed_value), 6.797706401138,
+        sum(run$imputed$imputed_value), 301.824372704215,
         tolerance = 1e-6
     )
 })

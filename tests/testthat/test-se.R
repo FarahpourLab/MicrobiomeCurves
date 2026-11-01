@@ -2,11 +2,18 @@ skip_if_not_installed("SummarizedExperiment")
 skip_if_not_installed("TreeSummarizedExperiment")
 
 test_that("mc_as_demo_se builds a rectangular object", {
-    se <- mc_as_demo_se()
+    se <- demo_se_small()
 
     expect_s4_class(se, "TreeSummarizedExperiment")
-    expect_equal(nrow(se), 12)
-    expect_equal(ncol(se), 70)
+    expect_equal(nrow(se), nrow(taxa_demo))
+
+    # Rectangular is the claim: every subject crossed with every time point,
+    # including the samples that do not exist, which come back as all-NA
+    # columns rather than being left out.
+    cd <- SummarizedExperiment::colData(se)
+    expect_equal(
+        ncol(se), length(unique(cd$subject)) * length(unique(cd$timepoint))
+    )
     expect_equal(SummarizedExperiment::assayNames(se), "clr")
     expect_true(
         all(c("subject", "timepoint") %in%
@@ -15,7 +22,7 @@ test_that("mc_as_demo_se builds a rectangular object", {
 })
 
 test_that("imputing a SummarizedExperiment adds an assay, not replaces one", {
-    se <- mc_as_demo_se()
+    se <- demo_se_small()
     out <- suppressWarnings(
         mc_run(se, subject_col = "subject", time_col = "timepoint",
             C = 1, verbose = FALSE)
@@ -35,14 +42,24 @@ test_that("imputing a SummarizedExperiment adds an assay, not replaces one", {
 
 test_that("the container route agrees with the table route", {
     # Both entry points must give the same values.
-    se <- mc_as_demo_se()
+    se <- demo_se_small()
     out <- suppressWarnings(
         mc_run(se, subject_col = "subject", time_col = "timepoint",
             C = 1, seed = 123, verbose = FALSE)
     )
     imp <- SummarizedExperiment::assay(out, "imputed")
 
-    tab <- mc_demo_table()
+    # The same corner of the cohort the SE fixture was cut to, so the two
+    # routes are compared on identical data. mc_demo_table() would load the
+    # whole bundled table and the comparison would then be against a
+    # different, much larger input.
+    cd0 <- SummarizedExperiment::colData(se)
+    subs <- unique(cd0$subject)
+    cols <- setdiff(names(taxa_demo), "OTU_ID")
+    tab <- taxa_demo[, c(
+        "OTU_ID", cols[sub("\\..*$", "", cols) %in% subs]
+    ), drop = FALSE]
+
     run <- suppressWarnings(
         run_wide_as_meta(tab, C = 1, seed = 123, verbose = FALSE)
     )

@@ -7,9 +7,33 @@
 # to disk.
 
 mc_traj_run <- function() {
-    demo <- mc_demo_data()
+    demo <- demo_small()
     suppressWarnings(mc_run(
-        demo$counts, demo$metadata,
+        demo$abundance, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        C = 1, verbose = FALSE
+    ))
+}
+
+# Every gap in the bundled cohort is a sample that has no column at all, so
+# the run creates a name for it and run$metadata$imputed is TRUE. The other
+# kind of gap -- a column that exists and holds NA for every taxon, a sample
+# that was planned and came back empty -- carries the caller's own name and
+# is flagged FALSE. One is made here, because the distinction the test below
+# is about only exists when both kinds are present.
+mc_traj_run_both_kinds <- function() {
+    demo <- demo_small()
+    ab <- demo$abundance
+
+    # Blank a sample belonging to a subject that can spare one and still
+    # have two left, so the design does not refuse it.
+    per <- table(demo$metadata$subject)
+    donor <- names(per)[per >= 3][1]
+    j <- which(demo$metadata$subject == donor)[1]
+    ab[, j] <- NA_real_
+
+    suppressWarnings(mc_run(
+        ab, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         C = 1, verbose = FALSE
     ))
@@ -45,7 +69,7 @@ test_that("the values are the completed table's, cell for cell", {
 })
 
 test_that("source comes from the run's record, not from created columns", {
-    run <- mc_traj_run()
+    run <- mc_traj_run_both_kinds()
     tx <- run$completed[[1]][1]
     tr <- mc_imputed_trajectory(run, tx)
 

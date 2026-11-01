@@ -4,11 +4,11 @@
 # something else.
 
 test_that("the old name for the cluster count is refused, not ignored", {
-    d <- mc_demo_data()
+    d <- demo_small()
 
     expect_error(
         mc_run(
-            d$counts, d$metadata,
+            d$abundance, d$metadata,
             sample_col = "sample", subject_col = "subject",
             time_col = "time", K = 1, verbose = FALSE
         ),
@@ -17,11 +17,11 @@ test_that("the old name for the cluster count is refused, not ignored", {
 })
 
 test_that("a misspelled argument is refused", {
-    d <- mc_demo_data()
+    d <- demo_small()
 
     expect_error(
         mc_run(
-            d$counts, d$metadata,
+            d$abundance, d$metadata,
             sample_col = "sample", subject_col = "subject",
             time_col = "time", subject_cols = "subject", verbose = FALSE
         ),
@@ -36,10 +36,10 @@ test_that("the guard passes anything the method actually takes", {
 })
 
 test_that("a run with the current argument names is unaffected", {
-    d <- mc_demo_data()
+    d <- demo_small()
 
     run <- suppressWarnings(mc_run(
-        d$counts, d$metadata,
+        d$abundance, d$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         C = 1, verbose = FALSE
     ))

@@ -93,7 +93,7 @@ mc_default_make_col <- function(rep, time) {
 #' head(info$observed)
 #'
 #' # the same table read from a CSV instead
-#' path <- system.file("extdata", "taxa_demo.csv", package = "MicrobiomeCurves")
+#' path <- system.file("extdata", "taxa_demo.csv.gz", package = "MicrobiomeCurves")
 #' dat <- read.csv(path, check.names = FALSE)
 #' nrow(mc_detect_missing(dat, taxon_col = "OTU_ID")$missing)
 #'
@@ -246,13 +246,14 @@ mc_detect_missing <- function(
 #' @examples
 #' # The bundled example in study form: taxa in the row names, samples named
 #' # however the study names them, and a metadata sheet.
-#' demo <- mc_demo_data()
+#' # A corner of the cohort, so the example is quick.
+#' demo <- mc_demo_data(n_taxa = 3, n_subjects = 6)
 #'
-#' demo$counts[1:3, 1:4]
+#' demo$abundance[1:3, 1:4]
 #' head(demo$metadata, 3)
 #'
 #' run <- suppressWarnings(mc_run(
-#'     demo$counts, demo$metadata,
+#'     demo$abundance, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
 #'     C = 1, verbose = FALSE
 #' ))
@@ -269,7 +270,7 @@ mc_detect_missing <- function(
 #' # Writing the completed table and a record of the run to a directory.
 #' out <- file.path(tempdir(), "imputation")
 #' run2 <- suppressWarnings(mc_run(
-#'     demo$counts, demo$metadata,
+#'     demo$abundance, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
 #'     out_dir = out, C = 1, verbose = FALSE
 #' ))

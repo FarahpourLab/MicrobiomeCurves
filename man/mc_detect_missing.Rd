@@ -80,7 +80,7 @@ info$missing
 head(info$observed)
 
 # the same table read from a CSV instead
-path <- system.file("extdata", "taxa_demo.csv", package = "MicrobiomeCurves")
+path <- system.file("extdata", "taxa_demo.csv.gz", package = "MicrobiomeCurves")
 dat <- read.csv(path, check.names = FALSE)
 nrow(mc_detect_missing(dat, taxon_col = "OTU_ID")$missing)
 

@@ -197,13 +197,14 @@ so observed and imputed data stay distinguishable.
 \examples{
 # The bundled example in study form: taxa in the row names, samples named
 # however the study names them, and a metadata sheet.
-demo <- mc_demo_data()
+# A corner of the cohort, so the example is quick.
+demo <- mc_demo_data(n_taxa = 3, n_subjects = 6)
 
-demo$counts[1:3, 1:4]
+demo$abundance[1:3, 1:4]
 head(demo$metadata, 3)
 
 run <- suppressWarnings(mc_run(
-    demo$counts, demo$metadata,
+    demo$abundance, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
     C = 1, verbose = FALSE
 ))
@@ -220,7 +221,7 @@ run$metadata[run$metadata$imputed, ]
 # Writing the completed table and a record of the run to a directory.
 out <- file.path(tempdir(), "imputation")
 run2 <- suppressWarnings(mc_run(
-    demo$counts, demo$metadata,
+    demo$abundance, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
     out_dir = out, C = 1, verbose = FALSE
 ))
@@ -233,8 +234,13 @@ library(TreeSummarizedExperiment)
 se <- mc_as_demo_se()
 se
 
+# A corner of it, so the example is quick: the object carries all 833
+# taxa over 64 subjects, and fitting that takes hours.
+keep <- colData(se)$subject \%in\% head(unique(colData(se)$subject), 6)
+small <- se[1:3, keep]
+
 out <- suppressWarnings(
-    mc_run(se, subject_col = "subject", time_col = "timepoint",
+    mc_run(small, subject_col = "subject", time_col = "timepoint",
         C = 1, verbose = FALSE)
 )
 

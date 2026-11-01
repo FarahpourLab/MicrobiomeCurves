@@ -23,14 +23,15 @@ with its 95\% analytic interval. Useful for filtering a completed table by
 how well determined each imputed value actually was.
 }
 \examples{
-demo <- mc_demo_data()
+# A corner of the cohort, so the example is quick.
+demo <- mc_demo_data(n_taxa = 3, n_subjects = 6)
 run <- suppressWarnings(mc_run(
-    demo$counts, demo$metadata,
+    demo$abundance, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
     C = 1, verbose = FALSE
 ))
 
-mc_uncertainty(run, rownames(demo$counts)[1])
+mc_uncertainty(run, rownames(demo$abundance)[1])
 
 }
 \seealso{

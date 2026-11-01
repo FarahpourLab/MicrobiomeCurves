@@ -190,11 +190,21 @@ NULL
 #'
 #' @examples
 #' data(taxa_demo)
+#' data(taxa_demo_meta)
+#'
+#' # A corner of the cohort, so the example is quick: three taxa and six
+#' # subjects, of the 833 and 64 the bundled table holds.
+#' subs <- head(unique(taxa_demo_meta$subject), 6)
+#' md <- taxa_demo_meta[taxa_demo_meta$subject %in% subs, ]
+#' small <- taxa_demo[1:3, c("OTU_ID", md$sample)]
+#'
+#' # A subject and time the subset has, to mask and then recover.
+#' cell <- data.frame(rep = md$subject[1], time = md$time[1])
 #'
 #' prep <- mc_prepare(
-#'     dat = taxa_demo,
+#'     dat = small,
 #'     taxon_col = "OTU_ID",
-#'     mask_list = data.frame(rep = "S01", time = 3)
+#'     mask_list = cell
 #' )
 #'
 #' # C = 1 pools all subjects. C = NULL picks C per taxon by silhouette

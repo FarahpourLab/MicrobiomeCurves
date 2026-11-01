@@ -4,34 +4,69 @@
 \alias{mc_demo_data}
 \title{The bundled example as an abundance table and metadata}
 \usage{
-mc_demo_data()
+mc_demo_data(n_taxa = NULL, n_subjects = NULL)
+}
+\arguments{
+\item{n_taxa}{Number of taxa to return, or \code{NULL} for all 833. The taxa
+that vary most over the samples returned are taken first, because most
+of this cohort sits at the detection floor in most samples and a
+constant curve shows nothing.}
+
+\item{n_subjects}{Number of subjects to return, or \code{NULL} for all 64.
+Taken in order, so the same number always gives the same subjects.}
 }
 \value{
-A list with \code{counts}, a numeric matrix, and \code{metadata}, a
-data.frame with columns \code{sample}, \code{subject} and \code{time}.
+A list with \code{abundance}, a numeric matrix of taxa by samples, and
+\code{metadata}, a data.frame with one row per sample and 14 columns. With
+both arguments \code{NULL} that is 833 taxa and 319 samples.
 }
 \description{
-Returns \code{taxa_demo} in the form \code{\link[=mc_run]{mc_run()}} expects: an abundance matrix
-with taxa in the row names and samples in columns, and a metadata table
-naming the subject and time behind each sample.
+Returns the bundled BONUS data in the form \code{\link[=mc_run]{mc_run()}} expects: an
+abundance matrix with taxa in the row names and samples in columns, and
+the cohort's metadata, one row per sample.
+}
+\details{
+The values are centred log ratios, so \code{\link[=mc_run]{mc_run()}} takes them with
+\code{abundance_type = "clr"} and \code{\link[=mc_trends]{mc_trends()}} with its default
+\code{normalization = "NONE"}.
 
-Sample names are deliberately arbitrary, as a real sequencing run's would
-be, to make clear that nothing is encoded in them.
+The metadata carries \code{sample}, \code{subject} and \code{time}, which every entry
+point needs, and ten columns of the cohort's own measurements that can be
+used as \code{covariates} or as \code{group_col}: \code{month}, \code{gender}, \code{panc_insuf},
+\code{genotype}, \code{antibiotics}, \code{breastmilk}, \code{formula}, \code{table_food},
+\code{weight} and \code{length}.
+
+\code{time} is the visit index, 0 to 6, which is the order the model works in.
+\code{month} is the infant's age in months at that visit, and is a covariate
+rather than the time axis.
+
+The whole table is 833 taxa over 64 subjects, and fitting all of it takes
+hours. \code{n_taxa} and \code{n_subjects} return a corner of it instead, which is
+the same data and enough to see how the functions behave.
 }
 \examples{
 demo <- mc_demo_data()
 
-demo$counts[1:3, 1:4]
-head(demo$metadata)
+dim(demo$abundance)
+demo$abundance[1:2, 1:4]
+head(demo$metadata[, c("sample", "subject", "time", "month", "gender")])
 
-run <- suppressWarnings(mc_run(
-    demo$counts, demo$metadata,
-    sample_col = "sample", subject_col = "subject", time_col = "time",
-    C = 1, verbose = FALSE
-))
-run$missing
+# The design is every subject crossed with every time point. The samples
+# that do not exist are the difference, and are what mc_run() fills.
+n_sub <- length(unique(demo$metadata$subject))
+n_time <- length(unique(demo$metadata$time))
+c(
+    design = n_sub * n_time,
+    collected = nrow(demo$metadata),
+    missing = n_sub * n_time - nrow(demo$metadata)
+)
+
+# a corner of it, for a quick look
+small <- mc_demo_data(n_taxa = 3, n_subjects = 6)
+dim(small$abundance)
 
 }
 \seealso{
-\link{taxa_demo} for the stored form, used by \code{\link[=mc_prepare]{mc_prepare()}}.
+\link{taxa_demo} for the stored form, used by \code{\link[=mc_prepare]{mc_prepare()}}, and
+\link{taxa_demo_meta} for the metadata on its own.
 }

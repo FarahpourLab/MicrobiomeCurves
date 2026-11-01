@@ -91,8 +91,13 @@ mc_encode_samples <- function(subject, time) {
 #' se <- mc_as_demo_se()
 #' se
 #'
+#' # A corner of it, so the example is quick: the object carries all 833
+#' # taxa over 64 subjects, and fitting that takes hours.
+#' keep <- colData(se)$subject %in% head(unique(colData(se)$subject), 6)
+#' small <- se[1:3, keep]
+#'
 #' out <- suppressWarnings(
-#'     mc_run(se, subject_col = "subject", time_col = "timepoint",
+#'     mc_run(small, subject_col = "subject", time_col = "timepoint",
 #'         C = 1, verbose = FALSE)
 #' )
 #'
@@ -151,10 +156,13 @@ setMethod("mc_run", "SummarizedExperiment", function(
 #' demonstrated without constructing an object by hand.
 #'
 #' @details
-#' The demo table is missing the sample `S04.2` entirely. That column is
-#' created here holding `NA`, so the returned object is rectangular and every
-#' subject-timepoint has a place. Two further samples, `S02.1` and `S07.4`,
-#' are present but entirely `NA`.
+#' The demo table has no column for a sample that was never collected, and
+#' there are 129 such subject-timepoints. Each is created here holding `NA`,
+#' so the returned object is rectangular and every subject-timepoint has a
+#' place, which is what a container interface requires.
+#'
+#' The object therefore carries all 833 taxa over 64 subjects and 7 time
+#' points. Subset it before fitting.
 #'
 #' @return A `TreeSummarizedExperiment` with one assay, `"clr"`.
 #'

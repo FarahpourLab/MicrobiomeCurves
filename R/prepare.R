@@ -76,15 +76,21 @@ NULL
 #'
 #' @examples
 #' data(taxa_demo)
+#' data(taxa_demo_meta)
 #'
-#' # Benchmark style: hide values that are known, to score them later.
-#' mask_list <- data.frame(
-#'     rep  = c("S01", "S02"),
-#'     time = c(3, 5)
-#' )
+#' # A corner of the cohort, so the example is quick: three taxa and six
+#' # subjects, of the 833 and 64 the bundled table holds.
+#' subs <- head(unique(taxa_demo_meta$subject), 6)
+#' md <- taxa_demo_meta[taxa_demo_meta$subject %in% subs, ]
+#' small <- taxa_demo[1:3, c("OTU_ID", md$sample)]
+#'
+#' # Benchmark style: hide values that are known, to score them later. The
+#' # pairs are taken from the data, so they are samples it actually has.
+#' mask_list <- md[c(1, 2), c("subject", "time")]
+#' names(mask_list) <- c("rep", "time")
 #'
 #' prep <- mc_prepare(
-#'     dat = taxa_demo,
+#'     dat = small,
 #'     taxon_col = "OTU_ID",
 #'     mask_list = mask_list
 #' )

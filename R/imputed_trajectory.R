@@ -59,14 +59,15 @@
 #'   flags those with `imputed = TRUE`.
 #'
 #' @examples
-#' demo <- mc_demo_data()
+#' # A corner of the cohort, so the example is quick.
+#' demo <- mc_demo_data(n_taxa = 3, n_subjects = 6)
 #' run <- suppressWarnings(mc_run(
-#'     demo$counts, demo$metadata,
+#'     demo$abundance, demo$metadata,
 #'     sample_col = "sample", subject_col = "subject", time_col = "time",
 #'     C = 1, verbose = FALSE
 #' ))
 #'
-#' tr <- mc_imputed_trajectory(run, rownames(demo$counts)[1])
+#' tr <- mc_imputed_trajectory(run, rownames(demo$abundance)[1])
 #' head(tr)
 #'
 #' # just the imputed cells, widest interval first
@@ -75,7 +76,7 @@
 #'                                     "lower", "upper")]
 #'
 #' # several taxa at once
-#' nrow(mc_imputed_trajectory(run, rownames(demo$counts)[1:3]))
+#' nrow(mc_imputed_trajectory(run, rownames(demo$abundance)[1:3]))
 #'
 #' @seealso [mc_uncertainty()] for the imputed cells of one taxon alone,
 #'   [mc_run()] for the run that produces these.

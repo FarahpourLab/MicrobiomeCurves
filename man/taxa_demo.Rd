@@ -3,75 +3,91 @@
 \docType{data}
 \name{taxa_demo}
 \alias{taxa_demo}
-\title{Simulated longitudinal microbiome table with missing samples}
+\title{Longitudinal microbiome table from the BONUS infant cohort}
 \format{
-A data frame with 12 rows (taxa) and 70 columns.
+A data frame with 833 rows (taxa) and 320 columns.
 
-The first column, \code{OTU_ID}, is a character taxon identifier running from
-\code{"Taxon01"} to \code{"Taxon12"}.
+The first column, \code{OTU_ID}, is a character taxon identifier: a
+full lineage from kingdom to species, such as
+\code{"k__Bacteria|p__Firmicutes|...|s__Ezakiella_SGB6726"}.
 
-The remaining 69 columns are numeric abundances, one per subject-timepoint,
-named \code{"<subject>.<time>"}  -  subjects \code{S01} to \code{S10} crossed
-with time points \code{0} to \code{6}. Of the 70 possible combinations, 69
-are present as columns (\code{S04.2} is absent) and two of those present are
-entirely \code{NA} (\code{S02.1} and \code{S07.4}).
+The remaining 319 columns are numeric centred log ratios, one per
+subject-timepoint, named \code{"<subject>.<time>"} - 64 subjects crossed
+with time points \code{0} to \code{6}, of which 319 of the 448
+combinations are present.
 }
 \source{
-Simulated by \code{data-raw/make_taxa_demo.R} in the package sources, with
-\code{set.seed(123)}. That script regenerates the dataset exactly.
+The BONUS cystic-fibrosis infant cohort. Prepared by
+\code{data-raw/make_taxa_demo.R} in the package sources, from the
+processed cohort tables and one missingness mask.
 }
 \usage{
 data(taxa_demo)
 }
 \description{
-A small example dataset in the layout the package expects, containing
-missing whole samples. Provided so the workflow can be run immediately
-without any external file.
+The bundled example, in the layout the package's benchmarking route
+works on: one table whose column names carry the subject and the time,
+with whole samples missing. Installing the package is enough to have it,
+so the workflow can be run without any external file.
 }
 \details{
-The data are \strong{simulated}, not from any real cohort. Each taxon follows a
-smooth curve over time, each subject carries a random offset, and normal
-noise is added. Values are on a CLR-like scale, so they are centred near
-zero and may be negative.
+The data are from the BONUS cystic-fibrosis infant cohort, at species
+level, as centred log ratios. They are real measurements, not simulated.
 
-The design mirrors the BONUS cystic-fibrosis cohort analysed in the paper:
-12 taxa, 10 subjects and 7 time points, with a few whole samples missing.
-Both forms of missingness that \code{\link{mc_detect_missing}} recognises
-are represented:
+Columns are named \code{"<subject>.<time>"}, which is what
+\code{\link{mc_detect_missing}} parses. A subject-timepoint with no
+column is a sample that does not exist, which is the missingness the
+package imputes. Of the 448 subject-timepoints in the design, 319 have a
+column and 129 do not.
+
+Two things were done to the cohort before bundling, both deliberate:
 
 \itemize{
-\item \code{S04.2}  -  the column is absent from the table entirely
-(\code{"absent_column"}).
-\item \code{S07.4} and \code{S02.1}  -  the columns are present but every
-taxon in them is \code{NA} (\code{"all_na"}).
+\item One missingness mask was applied, so the table has gaps to
+impute. The mask itself is not part of the data; a masked sample
+simply has no column.
+\item Subjects with fewer than two observed time points were dropped.
+\code{\link{mc_run}} refuses such a subject, since one observation
+carries almost nothing of its own, and example data that cannot be
+run would be of no use.
 }
 
-The same table is also shipped as a raw CSV, so the more realistic
-\code{read.csv()} entry point can be demonstrated:
+Every value is present: no column is partly or wholly \code{NA}. The
+missingness is entirely whole samples that were never collected.
+
+The same table is also shipped as a raw CSV, gzipped, so the more
+realistic \code{read.csv()} entry point can be demonstrated:
 
 \preformatted{
-path <- system.file("extdata", "taxa_demo.csv", package = "MicrobiomeCurves")
+path <- system.file("extdata", "taxa_demo.csv.gz", package = "MicrobiomeCurves")
 dat  <- read.csv(path, check.names = FALSE)
 }
 }
 \note{
 Fitting this dataset emits repeated \code{"There is a time gap of at
 least ..."} warnings. These come from \code{fdapace::FPCA}, not from this
-package, and are expected for sparse longitudinal designs  -  real cohorts
-such as BONUS and DIABIMMUNE produce them too. They are notices about the
-sampling design, not errors, and the imputation is unaffected.
+package, and are expected for sparse longitudinal designs. They are
+notices about the sampling design, not errors, and the imputation is
+unaffected.
+
+Fitting all 833 taxa takes hours. Subset the table, or pass \code{taxa}
+to \code{\link{mc_trends}}, for a quick look.
 }
 \examples{
 data(taxa_demo)
 
+taxa_demo[1:3, 1:4]
+
 # what is missing, and why
 info <- mc_detect_missing(taxa_demo, taxon_col = "OTU_ID")
-info$missing
+head(info$missing)
 
 # observations remaining per subject
 head(info$observed)
 }
 \seealso{
+\code{\link{mc_demo_data}} for the same data as an abundance
+matrix and metadata, \code{\link{taxa_demo_meta}} for the metadata,
 \code{\link{mc_run}}, \code{\link{mc_detect_missing}}
 }
 \keyword{datasets}

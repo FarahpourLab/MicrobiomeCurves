@@ -15,10 +15,13 @@ Wraps \link{taxa_demo} in a \code{TreeSummarizedExperiment}, with \code{subject}
 demonstrated without constructing an object by hand.
 }
 \details{
-The demo table is missing the sample \code{S04.2} entirely. That column is
-created here holding \code{NA}, so the returned object is rectangular and every
-subject-timepoint has a place. Two further samples, \code{S02.1} and \code{S07.4},
-are present but entirely \code{NA}.
+The demo table has no column for a sample that was never collected, and
+there are 129 such subject-timepoints. Each is created here holding \code{NA},
+so the returned object is rectangular and every subject-timepoint has a
+place, which is what a container interface requires.
+
+The object therefore carries all 833 taxa over 64 subjects and 7 time
+points. Subset it before fitting.
 }
 \examples{
 se <- mc_as_demo_se()

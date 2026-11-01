@@ -2,9 +2,10 @@ test_that("mc_run fills every missing cell and reports what it did", {
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
     expect_s3_class(run, "mc_run")
-    expect_equal(nrow(run$missing), 3)
+    expect_gt(nrow(run$missing), 0)
     expect_equal(run$n_failed, 0)
-    expect_equal(nrow(run$imputed), nrow(taxa_demo) * 3)
+    # One row per taxon per missing cell, whatever the fixture's size.
+    expect_equal(nrow(run$imputed), nrow(taxa_demo) * nrow(run$missing))
     expect_false(anyNA(run$imputed$imputed_value))
 })
 
@@ -12,7 +13,9 @@ test_that("observed values are never overwritten", {
     # Imputation must not modify measured values.
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
-    observed_cols <- setdiff(names(taxa_demo), c("OTU_ID", "S02.1", "S07.4"))
+    # Every column the fixture has holds data: its missingness is whole
+    # samples that have no column at all, so nothing is excluded here.
+    observed_cols <- setdiff(names(taxa_demo), "OTU_ID")
 
     for (cl in observed_cols) {
         expect_identical(
@@ -31,14 +34,19 @@ test_that("the completed table keeps the input layout", {
     expect_equal(nrow(run$completed), nrow(taxa_demo))
     observed <- setdiff(names(taxa_demo), "OTU_ID")
     expect_true(all(observed %in% names(run$completed)))
-    expect_true("S04_2" %in% names(run$completed))
-    expect_false("S04_2" %in% names(taxa_demo))
+
+    # A sample with no column of its own is added under a name built from
+    # its subject and time, which is not a name the input had.
+    made <- paste(run$missing$subject, run$missing$time, sep = "_")
+    expect_true(all(made %in% names(run$completed)))
+    expect_false(any(made %in% names(taxa_demo)))
 })
 
 test_that("previously missing cells come back populated", {
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1)
 
-    for (cl in c("S02.1", "S07.4", "S04_2")) {
+    made <- paste(run$missing$subject, run$missing$time, sep = "_")
+    for (cl in made) {
         expect_false(anyNA(run$completed[[cl]]), info = paste("column", cl))
         expect_type(run$completed[[cl]], "double")
     }
@@ -171,8 +179,14 @@ test_that("mc_run adds no logic of its own", {
     # functions directly.
     run <- quiet_run(taxa_demo, taxon_col = "OTU_ID", C = 1, seed = 42)
 
+    # mc_prepare() masks cells that have a column, so every sample the
+    # table does not have is restored as an all-NA column first. The run
+    # itself says which those are.
     dat_full <- taxa_demo
-    dat_full[["S04.2"]] <- NA_real_
+    for (i in seq_len(nrow(run$missing))) {
+        nm <- paste0(run$missing$subject[i], ".", run$missing$time[i])
+        dat_full[[nm]] <- NA_real_
+    }
 
     prep <- mc_prepare(
         dat = dat_full,
@@ -181,10 +195,18 @@ test_that("mc_run adds no logic of its own", {
     )
     manual <- mc_impute(quiet_fit(prep, C = 1, seed = 42))
 
-    expect_equal(run$imputed$imputed_value, manual$imputed_value)
-    expect_equal(run$imputed$species, manual$species)
-    expect_equal(run$imputed$subject, manual$rep)
-    expect_equal(run$imputed$time, manual$time)
+    # Matched on the cell rather than on row position: the two routes
+    # return the same cells, and the claim is that each cell gets the same
+    # value, not that both happen to order the rows alike.
+    key <- function(sp, su, tt) paste(sp, su, tt, sep = "")
+    k_run <- key(run$imputed$species, run$imputed$subject, run$imputed$time)
+    k_man <- key(manual$species, manual$rep, manual$time)
+
+    expect_setequal(k_run, k_man)
+    expect_equal(
+        run$imputed$imputed_value[order(k_run)],
+        manual$imputed_value[order(k_man)]
+    )
 })
 
 test_that("print.mc_run returns its input invisibly", {

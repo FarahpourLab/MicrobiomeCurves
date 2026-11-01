@@ -89,14 +89,29 @@ test_that("an all-NA column of logical type is accepted", {
 })
 
 test_that("the bundled CSV round-trips through read.csv", {
-    path <- system.file("extdata", "taxa_demo.csv", package = "MicrobiomeCurves")
+    path <- system.file("extdata", "taxa_demo.csv.gz", package = "MicrobiomeCurves")
     skip_if(path == "", "extdata not installed")
 
     dat <- read.csv(path, check.names = FALSE)
     info <- mc_detect_missing(dat, taxon_col = "OTU_ID")
 
-    expect_equal(nrow(info$missing), 3)
-    expect_setequal(info$missing$col, c("S02.1", "S04.2", "S07.4"))
+    # The claim is that the CSV and the lazy-loaded object are the same
+    # table, so the comparison is against the object rather than against
+    # numbers written out here, which would only have to be edited again
+    # whenever the bundled cohort is rebuilt.
+    env <- new.env(parent = emptyenv())
+    utils::data("taxa_demo", package = "MicrobiomeCurves", envir = env)
+    from_rda <- mc_detect_missing(env$taxa_demo, taxon_col = "OTU_ID")
+
+    expect_identical(dim(dat), dim(env$taxa_demo))
+    expect_identical(names(dat), names(env$taxa_demo))
+    expect_equal(nrow(info$missing), nrow(from_rda$missing))
+    expect_setequal(info$missing$col, from_rda$missing$col)
+
+    # Every gap in the bundled data is a sample that does not exist. No
+    # column is partly or wholly NA, which the cohort's own preparation
+    # guarantees and which several tests below rely on.
+    expect_true(all(info$missing$reason == "absent_column"))
 })
 
 test_that("a non-numeric column is rejected", {

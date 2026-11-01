@@ -1,5 +1,8 @@
 demo_bits <- function() {
-    utils::data("taxa_demo", package = "MicrobiomeCurves", envir = environment())
+    # The slice from helper-fixtures.R, not a fresh load of the bundled
+    # table: these tests call mc_prepare() many times over, and what they
+    # are about is what it refuses, which does not depend on how much data
+    # it is handed.
     d <- taxa_demo
     sub_cols <- grep("\\.[0-9]+$", names(d), value = TRUE)
     subs <- unique(sub("\\..*$", "", sub_cols))
@@ -18,7 +21,10 @@ test_that("a non-numeric sample column names itself", {
     bad[[b$sub_cols[1]]] <- as.character(bad[[b$sub_cols[1]]])
     expect_error(
         mc_prepare(bad, "OTU_ID", b$mask),
-        "not numeric.*S01\\.0"
+        paste0(
+            "not numeric.*",
+            gsub(".", "\\.", b$sub_cols[1], fixed = TRUE)
+        )
     )
 })
 
@@ -169,7 +175,9 @@ test_that("the partly measured error names the columns and counts", {
         error = function(e) conditionMessage(e)
     )
     expect_match(err, b$sub_cols[1], fixed = TRUE)
-    expect_match(err, "3 of 12 taxa NA", fixed = TRUE)
+    expect_match(
+        err, paste0("3 of ", nrow(b$dat), " taxa NA"), fixed = TRUE
+    )
 })
 
 test_that("a fully NA sample is still fine, and is imputed", {

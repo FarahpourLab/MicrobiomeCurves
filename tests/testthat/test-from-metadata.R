@@ -280,22 +280,31 @@ test_that("the long table uses the caller's subject and sample names", {
 })
 
 test_that("mc_demo_data returns the bundled example in study form", {
-    demo <- mc_demo_data()
+    demo <- demo_small()
 
     # Taxa in the row names, arbitrary sample names, one metadata row each.
-    expect_true(is.matrix(demo$counts))
-    expect_equal(rownames(demo$counts), taxa_demo$OTU_ID)
-    expect_equal(nrow(demo$metadata), ncol(demo$counts))
-    expect_setequal(demo$metadata$sample, colnames(demo$counts))
-    expect_false(any(grepl(".", colnames(demo$counts), fixed = TRUE)))
+    expect_true(is.matrix(demo$abundance))
+    expect_equal(rownames(demo$abundance), taxa_demo$OTU_ID)
+    expect_equal(nrow(demo$metadata), ncol(demo$abundance))
+    expect_setequal(demo$metadata$sample, colnames(demo$abundance))
+    expect_false(any(grepl(".", colnames(demo$abundance), fixed = TRUE)))
 
     run <- suppressWarnings(mc_run(
-        demo$counts, demo$metadata,
+        demo$abundance, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         C = 1, verbose = FALSE
     ))
     expect_s3_class(run, "mc_run")
-    expect_equal(nrow(run$missing), 3)
+    # However many gaps the fixture has, every one is reported and filled.
+    expect_gt(nrow(run$missing), 0)
+    expect_equal(nrow(run$imputed), nrow(demo$abundance) * nrow(run$missing))
+
+    # The cohort's own identifier is kept, so a row can be traced back to
+    # the stored table even though the sample was renamed.
+    expect_true("source_sample" %in% names(demo$metadata))
+    expect_setequal(
+        demo$metadata$source_sample, setdiff(names(taxa_demo), "OTU_ID")
+    )
 })
 
 test_that("raw counts are CLR-transformed on the way in", {
@@ -432,9 +441,9 @@ test_that("a run writes tables and a log, and no figures", {
 })
 
 test_that("every imputed cell gets an interval, screened-out subjects too", {
-    demo <- mc_demo_data()
+    demo <- demo_small()
     run <- suppressWarnings(mc_run(
-        demo$counts, demo$metadata,
+        demo$abundance, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         C = 1, verbose = FALSE
     ))
@@ -453,14 +462,14 @@ test_that("every imputed cell gets an interval, screened-out subjects too", {
 })
 
 test_that("mc_uncertainty returns the interval behind each imputed value", {
-    demo <- mc_demo_data()
+    demo <- demo_small()
     run <- suppressWarnings(mc_run(
-        demo$counts, demo$metadata,
+        demo$abundance, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         C = 1, verbose = FALSE
     ))
 
-    u <- mc_uncertainty(run, rownames(demo$counts)[1])
+    u <- mc_uncertainty(run, rownames(demo$abundance)[1])
     expect_s3_class(u, "data.frame")
     expect_equal(nrow(u), nrow(run$missing))
     expect_true(all(
@@ -474,16 +483,16 @@ test_that("mc_uncertainty returns the interval behind each imputed value", {
 })
 
 test_that("the uncertainty panel reflects whether screening was on", {
-    demo <- mc_demo_data()
-    sp <- rownames(demo$counts)[1]
+    demo <- demo_small()
+    sp <- rownames(demo$abundance)[1]
 
     on <- suppressWarnings(mc_run(
-        demo$counts, demo$metadata,
+        demo$abundance, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         use_outliers = TRUE, C = 1, verbose = FALSE
     ))
     off <- suppressWarnings(mc_run(
-        demo$counts, demo$metadata,
+        demo$abundance, demo$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         use_outliers = FALSE, C = 1, verbose = FALSE
     ))
@@ -519,9 +528,16 @@ test_that("the uncertainty panel reflects whether screening was on", {
 })
 
 test_that("a taxon gets one page, with its imputed values as facets", {
-    demo <- mc_demo_data()
+    demo <- demo_small()
+
+    # Cut to two subjects, which leaves exactly MC_FACETS_PER_PAGE gaps:
+    # several imputed values, and the most that still fit a single page.
+    subs <- unique(demo$metadata$subject)[1:2]
+    md <- demo$metadata[demo$metadata$subject %in% subs, , drop = FALSE]
+    ab <- demo$abundance[, md$sample, drop = FALSE]
+
     run <- suppressWarnings(mc_run(
-        demo$counts, demo$metadata,
+        ab, md,
         sample_col = "sample", subject_col = "subject", time_col = "time",
         C = 1, verbose = FALSE
     ))
@@ -529,6 +545,7 @@ test_that("a taxon gets one page, with its imputed values as facets", {
     taxa <- unique(run$fit$pred_long$species)
     cells <- sum(run$fit$pred_long$species == taxa[1])
     expect_gt(cells, 1)
+    expect_lte(cells, MicrobiomeCurves:::MC_FACETS_PER_PAGE)
 
     pages <- suppressWarnings(MicrobiomeCurves:::mc_taxon_pages(
         run$fit, taxa[1], run$design, isTRUE(run$fit$use_outliers)

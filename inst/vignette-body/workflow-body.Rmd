@@ -66,7 +66,7 @@ The bundled example is available in exactly that form:
 ```{r own-tables}
 demo <- mc_demo_data()
 
-demo$counts[1:3, 1:4]
+demo$abundance[1:3, 1:4]
 head(demo$metadata, 4)
 ```
 
@@ -75,7 +75,7 @@ reports what the design is missing:
 
 ```{r own-design}
 design <- mc_from_metadata(
-    demo$counts, demo$metadata,
+    demo$abundance, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time"
 )
 
@@ -101,7 +101,7 @@ lab$time <- factor(
 )
 
 d2 <- suppressWarnings(mc_from_metadata(
-    demo$counts, lab,
+    demo$abundance, lab,
     sample_col = "sample", subject_col = "subject", time_col = "time",
     verbose = FALSE
 ))
@@ -172,7 +172,7 @@ folder describes how its derived scales were produced.
 ```{r outdir}
 out <- file.path(tempdir(), "mc_example")
 run <- suppressWarnings(mc_run(
-    demo$counts, demo$metadata,
+    demo$abundance, demo$metadata,
     sample_col = "sample", subject_col = "subject", time_col = "time",
     out_dir = out, C = 1, verbose = FALSE
 ))
@@ -187,7 +187,7 @@ data. Each page shows every value imputed for one taxon with its interval, so
 a taxon whose gaps rest on very little information declares itself:
 
 ```{r unc}
-mc_uncertainty(run, rownames(demo$counts)[1])
+mc_uncertainty(run, rownames(demo$abundance)[1])
 ```
 
 `plots = FALSE` turns the drawing off. `plot_format = "png"` or `"both"`
