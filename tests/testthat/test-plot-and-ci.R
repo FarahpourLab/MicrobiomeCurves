@@ -18,40 +18,96 @@
 # tests are about the dplyr and patchwork imports and the shape of an
 # interval, so they do not depend on it either way.
 
-test_that("mc_plot works without dplyr or patchwork attached", {
+mc_plot_run <- function() {
+    demo <- demo_small()
+    suppressWarnings(mc_run(
+        demo$abundance, demo$metadata,
+        sample_col = "sample", subject_col = "subject", time_col = "time",
+        C = 1, verbose = FALSE
+    ))
+}
+
+test_that("mc_plot works without dplyr or ggplot2 attached", {
     skip_if_not_installed("ggplot2")
-    skip_if_not_installed("patchwork")
 
     expect_false("package:dplyr" %in% search())
-    expect_false("package:patchwork" %in% search())
+    expect_false("package:ggplot2" %in% search())
 
-    fit <- quiet_fit(demo_prep(), C = 1, seed = 123, use_outliers = FALSE)
-
-    p <- suppressWarnings(
-        mc_plot(
-            fit = fit,
-            species_name = taxa_demo$OTU_ID[1],
-            rep_id = demo_masked_cell$rep,
-            time_id = demo_masked_cell$time,
-            ci_method = "analytic"
-        )
-    )
+    run <- mc_plot_run()
+    p <- mc_plot(run, run$completed[[1]][1], run$imputed$subject[1])
 
     expect_s3_class(p, "ggplot")
 })
 
-test_that("mc_plot rejects a species it never fitted", {
-    fit <- quiet_fit(demo_prep(), C = 1, seed = 123, use_outliers = FALSE)
+test_that("mc_plot refuses a taxon or a subject the run does not have", {
+    run <- mc_plot_run()
+    tx <- run$completed[[1]][1]
 
-    expect_error(
-        suppressWarnings(
-            mc_plot(
-                fit,
-                species_name = "NotATaxon", rep_id = demo_masked_cell$rep, time_id = demo_masked_cell$time
-            )
-        ),
-        "clustering"
+    subj <- run$imputed$subject[1]
+    expect_error(mc_plot(run, "NotATaxon", subj), "NotATaxon")
+    expect_error(mc_plot(run, tx, subject = "NotASubject"), "no subject")
+
+    # One subject is the whole point of the plot, so it is asked for
+    # rather than chosen on the caller's behalf.
+    expect_error(mc_plot(run, tx), "subject is required")
+
+    # The signature changed from (fit, species, rep, time) to (run, taxon,
+    # subject), so a fit handed to it is refused with a message saying so
+    # rather than failing somewhere inside.
+    expect_error(mc_plot(run$fit, tx, subj), "must be an mc_run")
+})
+
+test_that("mc_plot marks observed and imputed, and bounds only imputed", {
+    run <- mc_plot_run()
+    tx <- run$completed[[1]][1]
+    subj <- run$imputed$subject[1]
+
+    p <- mc_plot(run, tx, subject = subj)
+    tr <- mc_imputed_trajectory(run, tx)
+    target <- tr[tr$subject == subj, ]
+
+    # Every layer is built from the trajectory table, so the picture and
+    # the tables the run wrote cannot disagree.
+    pts <- p$layers[[which(vapply(
+        p$layers, function(l) inherits(l$geom, "GeomPoint"), logical(1)
+    ))[1]]]
+    expect_equal(nrow(pts$data), nrow(target))
+    expect_setequal(unique(pts$data$source), unique(target$source))
+
+    # An observed value is a measurement, so no interval is drawn for it.
+    bars <- Filter(
+        function(l) inherits(l$geom, "GeomErrorbar"), p$layers
     )
+    expect_length(bars, 1)
+    expect_true(all(bars[[1]]$data$source == "imputed"))
+    expect_equal(
+        nrow(bars[[1]]$data), sum(target$source == "imputed")
+    )
+})
+
+test_that("uncertainty is bars at points, never a band across them", {
+    run <- mc_plot_run()
+    tx <- run$completed[[1]][1]
+    tr <- mc_imputed_trajectory(run, tx)
+
+    # A subject whose imputed points have observed ones between them,
+    # which is where a band would make its false claim.
+    imp <- tr[tr$source == "imputed", ]
+    subj <- names(which.max(table(imp$subject)))
+    target <- tr[tr$subject == subj, ]
+    target <- target[order(target$time), ]
+    expect_true(any(
+        target$source[-1] == "observed" &
+            target$source[-nrow(target)] == "imputed"
+    ))
+
+    p <- mc_plot(run, tx, subj)
+    expect_length(Filter(
+        function(l) inherits(l$geom, "GeomRibbon"), p$layers
+    ), 0)
+    expect_length(Filter(
+        function(l) inherits(l$geom, "GeomErrorbar"), p$layers
+    ), 1)
 })
 
 test_that("analytic confidence intervals are well formed", {

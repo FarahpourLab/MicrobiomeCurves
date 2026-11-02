@@ -106,8 +106,9 @@ NULL
 #' @seealso
 #' \code{\link{mc_fit}},
 #' \code{\link{mc_ci}}
-#' @export
-mc_plot <- function(
+#' @keywords internal
+#' @noRd
+mc_plot_cell <- function(
     fit,
     species_name,
     rep_id,

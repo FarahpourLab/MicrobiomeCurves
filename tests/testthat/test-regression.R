@@ -9,6 +9,11 @@
 # did not change at that point. The fixture is the corner of the cohort cut
 # out in helper-fixtures.R, and these constants follow that slice.
 #
+# The mc_run() constants were regenerated again on 2026-11-02, when
+# use_outliers became FALSE by default. Those numbers are now a run with
+# every subject fitted. The mc_fit() constants above it ask for
+# use_outliers = TRUE explicitly and did not move.
+#
 # They were regenerated on 2026-10-12, when the estimator changed. Until then
 # the package recomputed each subject's FPC scores with its own BLUP algebra;
 # it now reads the scores fdapace itself used, from fp$xiEst, so the value is
@@ -73,12 +78,12 @@ test_that("mc_run output for the bundled data has not changed", {
 
     expect_equal(
         head(run$imputed$imputed_value, 6),
-        c(2.945243495916, 1.064910304993, 1.561876299086,
-            1.016944360361, 6.122990793884, 5.960239421056),
+        c(2.945243495916, 1.392244958947, 1.728378001946,
+            1.426016085306, 6.757979212736, 6.150286684180),
         tolerance = 1e-6
     )
     expect_equal(
-        sum(run$imputed$imputed_value), 301.824372704215,
+        sum(run$imputed$imputed_value), 308.660118893840,
         tolerance = 1e-6
     )
 })
