@@ -23,8 +23,6 @@ mc_compare(
   p_adjust = "BH",
   alpha = 0.05,
   out_dir = NULL,
-  plots = FALSE,
-  dpi = 300,
   n_cores = 1,
   verbose = TRUE
 )
@@ -95,16 +93,13 @@ their own, and no test is reported for them.}
 
 \item{p_adjust}{A \code{stats::p.adjust} method.}
 
-\item{alpha}{Significance threshold on the adjusted p-value. It selects
-which taxa are plotted and is reported in the log; it does not affect
-any fit.}
+\item{alpha}{Significance threshold on the adjusted p-value. It is
+reported, and \code{\link[=mc_trend_plot]{mc_trend_plot()}} takes it as the default set of taxa to
+draw; it does not affect any fit.}
 
-\item{out_dir}{Directory to write the results table and log into, or
-\code{NULL} to write nothing.}
-
-\item{plots}{Logical. Whether to draw one figure per significant taxon.}
-
-\item{dpi}{Resolution of the per-taxon images, in dots per inch.}
+\item{out_dir}{Directory to write the results table into, or \code{NULL} to
+write nothing. No figures are written: drawing is \code{\link[=mc_trend_plot]{mc_trend_plot()}}'s
+job, so the table can be looked over before anything is drawn.}
 
 \item{n_cores}{Number of cores. Taxa are independent, so this splits by
 taxon. Forking only; ignored on Windows.}

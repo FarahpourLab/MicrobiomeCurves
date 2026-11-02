@@ -476,7 +476,7 @@ test_that("out_dir writes the table and a log naming the model", {
     expect_output(print(cm), "test         :")
 })
 
-test_that("plots are drawn for significant taxa and need an out_dir", {
+test_that("a trend run writes its table and no figures", {
     meta <- mc_td()
     tab <- mc_tt(meta, list(
         Diverges = function(d) ifelse(d$arm == "armB", 1.2 * d$time, 0)
@@ -484,17 +484,21 @@ test_that("plots are drawn for significant taxa and need an out_dir", {
     dir <- withr::local_tempdir()
 
     cm <- mc_compare(tab, meta, "sample", "subject", "time",
-        group_col = "arm", out_dir = dir, plots = TRUE, verbose = FALSE
+        group_col = "arm", out_dir = dir, verbose = FALSE
     )
-    imgs <- list.files(file.path(dir, "plots"), pattern = "\\.png$")
-    expect_identical(imgs, "Diverges.png")
+    # Drawing is mc_trend_plot()'s job, so a run leaves nothing to look at
+    # before its q-values have been read.
+    expect_setequal(basename(cm$files), "compare.tsv")
+    expect_length(list.files(dir, pattern = "[.]png$", recursive = TRUE), 0)
 
-    expect_warning(
-        mc_compare(tab, meta, "sample", "subject", "time",
-            group_col = "arm", plots = TRUE, verbose = FALSE
-        ),
-        "needs an out_dir"
-    )
+    imgs <- mc_trend_plot(cm, out_dir = dir, dpi = 72, verbose = FALSE)
+    files <- list.files(dir, pattern = "[.]png$")
+    # The name ends in a short hash of the full lineage, because two
+    # species of one genus share every character a truncated name would
+    # keep and the second figure would otherwise overwrite the first.
+    expect_length(files, 1)
+    expect_match(files, "^Diverges_[0-9a-f]{8}[.]png$")
+    expect_s3_class(imgs, "ggplot")
 })
 
 test_that("a refit reproduces the fit the run reported", {
@@ -524,4 +528,67 @@ test_that("the result keeps the data but not the models", {
     expect_null(tr$models)
     expect_identical(nrow(tr$design), nrow(meta))
     expect_identical(dim(tr$abundance), c(1L, nrow(meta)))
+})
+
+test_that("two species of one genus get two files, not one", {
+    meta <- mc_td()
+    # Names that agree for far longer than any truncation would keep, and
+    # differ only at the very end. This is the real case: a lineage runs
+    # past 80 characters before the species is reached.
+    long <- paste0(
+        "k__Bacteria|p__Actinobacteria|c__Actinomycetia|",
+        "o__Bifidobacteriales|f__Bifidobacteriaceae|g__Bifidobacterium|",
+        "s__Bifidobacterium_"
+    )
+    nm <- paste0(long, c("breve", "longum"))
+
+    tab <- mc_tt(meta, stats::setNames(
+        list(function(d) 0.9 * d$time, function(d) -0.9 * d$time), nm
+    ))
+
+    dir <- withr::local_tempdir()
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    mc_trend_plot(tr, out_dir = dir, dpi = 72, verbose = FALSE)
+
+    expect_equal(sum(tr$results$q_value < 0.05, na.rm = TRUE), 2)
+    expect_length(list.files(dir), 2)
+})
+
+test_that("a vector of taxa gives one figure each, whatever their q value", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Rising = function(d) 0.9 * d$time,
+        Flat = function(d) 0
+    ))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    expect_gt(tr$results$q_value[tr$results$taxon == "Flat"], 0.05)
+
+    # Flat is not significant and is drawn anyway: naming it is already a
+    # decision that it is worth looking at.
+    ps <- mc_trend_plot(tr, c("Rising", "Flat"))
+    expect_length(ps, 2)
+    expect_named(ps, c("Rising", "Flat"))
+    expect_s3_class(ps[["Flat"]], "ggplot")
+
+    # One name gives the figure itself, not a list of one.
+    one <- mc_trend_plot(tr, "Flat")
+    expect_s3_class(one, "ggplot")
+
+    dir <- withr::local_tempdir()
+    mc_trend_plot(tr, "Flat", out_dir = dir, dpi = 72, verbose = FALSE)
+    expect_match(list.files(dir), "^Flat_[0-9a-f]{8}[.]png$")
+})
+
+test_that("mc_trend_plot refuses what it cannot draw", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(Flat = function(d) 0))
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+
+    expect_error(mc_trend_plot(tr, "Nope"), "Not in this result")
+    # Nothing significant, so the default set is empty and the call says so
+    # rather than returning nothing.
+    expect_error(mc_trend_plot(tr), "nothing to draw")
+    expect_error(mc_trend_plot(tr, 1), "character vector")
+    expect_error(mc_trend_plot(tr$results, "Flat"), "mc_trends")
 })

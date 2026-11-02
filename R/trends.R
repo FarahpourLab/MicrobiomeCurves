@@ -106,13 +106,12 @@
 #'   `"none"`.
 #' @param taxa Character vector of taxa to test, or `NULL` for all.
 #' @param p_adjust A `stats::p.adjust` method.
-#' @param alpha Significance threshold on the adjusted p-value. It selects
-#'   which taxa are plotted and is reported in the log; it does not affect
-#'   any fit.
-#' @param out_dir Directory to write the results table and log into, or
-#'   `NULL` to write nothing.
-#' @param plots Logical. Whether to draw one figure per significant taxon.
-#' @param dpi Resolution of the per-taxon images, in dots per inch.
+#' @param alpha Significance threshold on the adjusted p-value. It is
+#'   reported, and [mc_trend_plot()] takes it as the default set of taxa to
+#'   draw; it does not affect any fit.
+#' @param out_dir Directory to write the results table into, or `NULL` to
+#'   write nothing. No figures are written: drawing is [mc_trend_plot()]'s
+#'   job, so the table can be looked over before anything is drawn.
 #' @param n_cores Number of cores. Taxa are independent, so this splits by
 #'   taxon. Forking only; ignored on Windows.
 #' @param verbose Logical. Whether to report the resolved settings.
@@ -151,8 +150,8 @@
 #' tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
 #' tr$results[, c("taxon", "edf", "p_value", "q_value")]
 #'
-#' @seealso [mc_compare()] to ask whether groups differ, [mc_run()] to
-#'   impute missing samples first.
+#' @seealso [mc_trend_plot()] to draw the result, [mc_compare()] to ask
+#'   whether groups differ, [mc_run()] to impute missing samples first.
 #'
 #' @importFrom mgcv gam s
 #' @export
@@ -169,8 +168,6 @@ mc_trends <- function(abundance, metadata,
                       p_adjust = "BH",
                       alpha = 0.05,
                       out_dir = NULL,
-                      plots = FALSE,
-                      dpi = 300,
                       n_cores = 1,
                       verbose = TRUE) {
     subject_effect <- match.arg(subject_effect)
@@ -186,8 +183,7 @@ mc_trends <- function(abundance, metadata,
         group_col = NULL, reference = NULL,
         covariates = covariates, k = k, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
-        out_dir = out_dir, plots = plots, dpi = dpi,
-        n_cores = n_cores, verbose = verbose
+        out_dir = out_dir, n_cores = n_cores, verbose = verbose
     )
 }
 
@@ -311,8 +307,6 @@ mc_compare <- function(abundance, metadata,
                        p_adjust = "BH",
                        alpha = 0.05,
                        out_dir = NULL,
-                       plots = FALSE,
-                       dpi = 300,
                        n_cores = 1,
                        verbose = TRUE) {
     subject_effect <- match.arg(subject_effect)
@@ -339,8 +333,7 @@ mc_compare <- function(abundance, metadata,
         group_col = group_col, reference = reference,
         covariates = covariates, k = k, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
-        out_dir = out_dir, plots = plots, dpi = dpi,
-        n_cores = n_cores, verbose = verbose
+        out_dir = out_dir, n_cores = n_cores, verbose = verbose
     )
 }
 
@@ -362,9 +355,8 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                          time_col, taxon_col, normalization, transform,
                          pseudocount, group_col, reference,
                          covariates, k, subject_effect, taxa, p_adjust,
-                         alpha, out_dir, plots, dpi, n_cores, verbose) {
+                         alpha, out_dir, n_cores, verbose) {
     say <- function(...) if (isTRUE(verbose)) message(...)
-    mc_check_dpi(dpi)
 
     design <- mc_trend_design(
         metadata, sample_col, subject_col, time_col, group_col, covariates
@@ -503,17 +495,6 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
     stem <- if (is.null(group_col)) "trends" else "compare"
     if (!is.null(out_dir)) {
         files <- mc_trend_write(res, out_dir, stem)
-    }
-    if (isTRUE(plots)) {
-        if (is.null(out_dir)) {
-            warning(
-                "plots = TRUE needs an out_dir to write them into; ",
-                "no figures were drawn.",
-                call. = FALSE
-            )
-        } else {
-            files <- c(files, mc_trend_plots(obj, out_dir, dpi, verbose))
-        }
     }
     obj$files <- files
     if (length(files) > 0) {
