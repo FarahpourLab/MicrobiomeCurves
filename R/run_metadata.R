@@ -150,7 +150,7 @@ mc_emit_output <- function(run, out_dir, warned, verbose) {
     # behind every imputed value is already in imputed_uncertainty.tsv.
     # mc_uncertainty() returns one taxon's intervals and mc_plot() draws a
     # taxon on demand, for the cases where a picture is wanted.
-    files <- mc_write_output(run, out_dir, warned)
+    files <- mc_write_output(run, out_dir)
 
     run$files <- files
     say("Wrote ", length(files), " file(s) to ", out_dir, ": ",

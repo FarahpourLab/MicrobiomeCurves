@@ -347,14 +347,39 @@ mc_fit_taxon <- function(df_sp, reps, rows, pred_long, use_outliers,
 #'
 #' @keywords internal
 #' @noRd
+#' How often to report progress through the cells
+#'
+#' @description
+#' Ten lines or so, whatever the size of the run: every tenth cell on a
+#' small one, every hundredth once there are at least a hundred to do. A
+#' fixed step would either say nothing on a small run or scroll for pages
+#' on a real study.
+#'
+#' @param total Number of cells to be imputed.
+#'
+#' @return A single integer step.
+#'
+#' @keywords internal
+#' @noRd
+mc_progress_step <- function(total) {
+    if (total < 100L) 10L else 100L
+}
+
+
 mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
                              pred_long, use_outliers, C, seed,
-                             cluster_method = "fpca") {
+                             cluster_method = "fpca",
+                             say = function(...) NULL) {
     n_taxa <- length(species_vec)
     clusters_by_taxon <- vector("list", length = n_taxa)
     outliers_by_taxon <- vector("list", length = n_taxa)
     names(clusters_by_taxon) <- species_vec
     names(outliers_by_taxon) <- species_vec
+
+    total <- nrow(pred_long)
+    step <- mc_progress_step(total)
+    done <- 0L
+    mark <- step
 
     for (i in seq_len(n_taxa)) {
         sp_name <- species_vec[i]
@@ -372,6 +397,17 @@ mc_fit_all_taxa <- function(long, taxon_col, species_vec, reps,
         pred_long$FPCA_used[rows] <- res$values$used
         pred_long$lower[rows] <- res$values$lower
         pred_long$upper[rows] <- res$values$upper
+
+        # A taxon's cells are all filled at once, so the count moves in
+        # steps of however many cells that taxon had. The running total is
+        # reported rather than the threshold it crossed, because the honest
+        # answer to "how far along is it" is the number actually done. The
+        # last line is left to the caller's "Done:" message.
+        done <- done + length(rows)
+        if (done >= mark && done < total) {
+            say("  ", done, "/", total, " cell(s) imputed")
+            mark <- (done %/% step + 1L) * step
+        }
     }
 
     list(

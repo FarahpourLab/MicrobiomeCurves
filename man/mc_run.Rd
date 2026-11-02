@@ -85,10 +85,11 @@ sample's smallest non-zero value, or a single positive number added to
 every entry.}
 
 \item{out_dir}{Optional directory to write results into. When given, the
-completed table is written as \code{imputed_abundance.tsv} and a record
-of the run as \code{imputation_log.txt}, holding the time points in
-order, the counts of samples, subjects and time points, every
-subject-timepoint that was missing and why, and any warning raised.}
+completed table is written on each scale the run can honour, together
+with the interval behind every imputed value. Nothing else is written:
+the design, the subject-timepoints that were missing and why, and the
+warnings raised are all on the returned object, as \code{$design},
+\code{$missing} and \code{$warnings}.}
 
 \item{C}{Integer or \code{NULL}. Number of trajectory clusters, passed
 straight to \code{\link{mc_fit}}. \code{NULL} selects C per taxon by mean

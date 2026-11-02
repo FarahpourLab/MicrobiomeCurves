@@ -86,8 +86,7 @@ test_that("three tables, the uncertainty table and a log are written", {
         basename(run$files),
         c(
             "imputed_clr.tsv", "imputed_relative_abundance.tsv",
-            "imputed_counts.tsv", "imputed_uncertainty.tsv",
-            "imputation_log.txt"
+            "imputed_counts.tsv", "imputed_uncertainty.tsv"
         )
     )
     expect_true(all(file.exists(run$files)))
@@ -151,8 +150,11 @@ test_that("CLR in, zeros cannot be recovered and the log says so", {
     expect_true(all(as.matrix(ra[, -1]) > 0))
     expect_equal(unname(colSums(ra[, -1])), rep(1, ncol(ra) - 1))
 
-    log <- readLines(file.path(dir, "imputation_log.txt"))
-    expect_true(any(grepl("small positive number", log)))
+    # The run records that it had no library sizes and no structural zeros
+    # to work from, which is why the zeros did not come back. Asserted on
+    # the object rather than on a sentence in a file.
+    expect_identical(run$abundance_type, "clr")
+    expect_null(run$scale_info$observed)
 })
 
 test_that("CLR in, one library size is used for the whole table", {

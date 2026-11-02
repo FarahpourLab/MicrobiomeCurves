@@ -195,7 +195,7 @@ mc_run_groups <- function(dat, metadata, sample_col, subject_col,
         # The merged tables only. Each group has already written its own
         # log, which cannot be merged because each describes a different
         # set of subjects.
-        written <- mc_write_output(merged, out_dir, merged$warnings)
+        written <- mc_write_output(merged, out_dir)
         merged$files <- c(
             written, unlist(lapply(runs, function(r) r$files), use.names = FALSE)
         )

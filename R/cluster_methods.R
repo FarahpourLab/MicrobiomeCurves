@@ -36,7 +36,8 @@ mc_assign_clusters <- function(fp, scores, k_use, subjects, method) {
         if (!is.null(cl)) {
             return(cl)
         }
-        mc_diag_bump("kfd_fallback")
+        # kmeans.fd() fails outright on very small sets of curves, so the
+        # score-based route stands in rather than losing the taxon.
     }
 
     km <- kmeans(scores, centers = k_use, nstart = 20)

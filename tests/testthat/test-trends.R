@@ -158,19 +158,17 @@ test_that("the log says which test was used", {
     tab2 <- mc_tt(meta2, list(X = function(d) 0.5 * d$time))
     dir <- withr::local_tempdir()
 
-    mc_compare(tab2, meta2, "sample", "subject", "time",
-        group_col = "arm", out_dir = file.path(dir, "two"), verbose = FALSE
+    two <- mc_compare(tab2, meta2, "sample", "subject", "time",
+        group_col = "arm", verbose = FALSE
     )
-    mc_compare(tab3, meta3, "sample", "subject", "time",
-        group_col = "arm", reference = "armA",
-        out_dir = file.path(dir, "three"), verbose = FALSE
+    three <- mc_compare(tab3, meta3, "sample", "subject", "time",
+        group_col = "arm", reference = "armA", verbose = FALSE
     )
 
-    two <- readLines(file.path(dir, "two", "compare_log.txt"))
-    three <- readLines(file.path(dir, "three", "compare_log.txt"))
-    expect_true(any(grepl("difference smooth", two, fixed = TRUE)))
+    expect_match(two$settings$test, "difference smooth", fixed = TRUE)
     # Three groups take the omnibus even with a named reference.
-    expect_true(any(grepl("omnibus", three, fixed = TRUE)))
+    expect_match(three$settings$test, "omnibus", fixed = TRUE)
+    expect_identical(three$settings$reference, "armA")
 })
 
 test_that("mc_compare requires group_col", {
@@ -456,28 +454,26 @@ test_that("out_dir writes the table and a log naming the model", {
     tr <- mc_trends(tab, meta, "sample", "subject", "time",
         out_dir = dir, verbose = FALSE
     )
-    expect_setequal(
-        basename(tr$files), c("trends.tsv", "trends_log.txt")
-    )
+    expect_setequal(basename(tr$files), "trends.tsv")
     back <- utils::read.delim(
         file.path(dir, "trends.tsv"),
         check.names = FALSE
     )
     expect_identical(back$taxon, tr$results$taxon)
 
-    log <- readLines(file.path(dir, "trends_log.txt"))
-    expect_true(any(grepl("value ~ s(time, k =", log, fixed = TRUE)))
-    expect_true(any(grepl("REML", log, fixed = TRUE)))
+    # The model that produced the table is on the object, since no log is
+    # written for it to be read out of.
+    expect_match(tr$settings$formula, "value ~ s(time, k =", fixed = TRUE)
+    expect_identical(tr$settings$method, "REML")
+    expect_match(tr$settings$test, "s(time)", fixed = TRUE)
 
     cm <- mc_compare(tab, meta, "sample", "subject", "time",
         group_col = "arm", out_dir = dir, verbose = FALSE
     )
-    expect_setequal(
-        basename(cm$files), c("compare.tsv", "compare_log.txt")
-    )
-    clog <- readLines(file.path(dir, "compare_log.txt"))
-    expect_true(any(grepl("reference", clog, fixed = TRUE)))
-    expect_true(any(grepl("approximate", clog, fixed = TRUE)))
+    expect_setequal(basename(cm$files), "compare.tsv")
+    expect_false(any(grepl("[.]txt$", list.files(dir))))
+    expect_true(nzchar(cm$settings$reference))
+    expect_output(print(cm), "test         :")
 })
 
 test_that("plots are drawn for significant taxa and need an out_dir", {

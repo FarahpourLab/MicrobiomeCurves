@@ -785,7 +785,7 @@ mc_trend_warn_absorbed <- function(design, subject_effect) {
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_write <- function(res, meta, out_dir, stem) {
+mc_trend_write <- function(res, out_dir, stem) {
     if (!dir.exists(out_dir)) {
         ok <- dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
         if (!ok) {
@@ -797,7 +797,8 @@ mc_trend_write <- function(res, meta, out_dir, stem) {
         res, f,
         sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE
     )
-    log <- file.path(out_dir, paste0(stem, "_log.txt"))
-    writeLines(meta, log)
-    c(f, log)
+
+    # The table only. How the model was specified is on the returned
+    # object, in $settings, and print() shows it.
+    f
 }

@@ -24,10 +24,10 @@
 #' `run$metadata$imputed` is `FALSE` for it, so a flag taken from there would
 #' miss exactly those cells.
 #'
-#' Why a cell was missing is not reported. `run$design$missing` and
-#' `imputation_log.txt` already say so per cell, and `sample` implies it: a
-#' name from your own metadata means the column was there and held `NA`,
-#' while a name the run created means no sample existed.
+#' Why a cell was missing is not reported. `run$design$missing` already
+#' says so per cell, and `sample` implies it: a name from your own metadata
+#' means the column was there and held `NA`, while a name the run created
+#' means no sample existed.
 #'
 #' The interval is the one the fit produced, read back from the run rather
 #' than recomputed, so it agrees exactly with `imputed_uncertainty.tsv`. It

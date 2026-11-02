@@ -372,6 +372,8 @@ mc_report_failures <- function(pred, say) {
 #' @param use_outliers Logical. Whether to screen outlying curves.
 #' @param seed Integer random seed.
 #' @param say Function used to report progress.
+#' @param verbose Logical, passed to [mc_fit()] so the per-cell progress
+#'   lines appear for the same runs as every other message.
 #'
 #' @return List with the `fit`, the long predictions `pred`, the `completed`
 #'   table and the `n_failed` count.
@@ -380,7 +382,7 @@ mc_report_failures <- function(pred, say) {
 #' @noRd
 mc_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
                              C, cluster_method, use_outliers, seed,
-                             say) {
+                             say, verbose = FALSE) {
     prep <- mc_prepare(
         dat = dat_full,
         taxon_col = taxon_col,
@@ -395,7 +397,8 @@ mc_run_pipeline <- function(dat_full, taxon_col, parse_fun, info,
         C = C,
         cluster_method = cluster_method,
         use_outliers = use_outliers,
-        seed = seed
+        seed = seed,
+        verbose = verbose
     )
 
     pred <- mc_impute(fit)

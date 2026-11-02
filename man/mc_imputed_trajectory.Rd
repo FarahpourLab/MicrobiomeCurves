@@ -32,10 +32,10 @@ column was present but entirely \code{NA} was imputed too, and
 \code{run$metadata$imputed} is \code{FALSE} for it, so a flag taken from there would
 miss exactly those cells.
 
-Why a cell was missing is not reported. \code{run$design$missing} and
-\code{imputation_log.txt} already say so per cell, and \code{sample} implies it: a
-name from your own metadata means the column was there and held \code{NA},
-while a name the run created means no sample existed.
+Why a cell was missing is not reported. \code{run$design$missing} already
+says so per cell, and \code{sample} implies it: a name from your own metadata
+means the column was there and held \code{NA}, while a name the run created
+means no sample existed.
 
 The interval is the one the fit produced, read back from the run rather
 than recomputed, so it agrees exactly with \code{imputed_uncertainty.tsv}. It

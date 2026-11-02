@@ -470,7 +470,29 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                 reference = grp$reference, group = grp$group,
                 levels = grp$levels, alpha = alpha, p_adjust = p_adjust,
                 sample_col = sample_col, subject_col = subject_col,
-                time_col = time_col
+                time_col = time_col,
+                # What was fitted and what was tested, kept here because a
+                # result that cannot say which model produced it cannot be
+                # reproduced, and because nothing else records the choice:
+                # the number of group levels decides the test, and that is
+                # not visible from the table of p-values.
+                formula = paste(
+                    "value ~",
+                    paste(
+                        mc_trend_terms(
+                            k, subject_effect, covariates, grp$group, TRUE
+                        ),
+                        collapse = " + "
+                    )
+                ),
+                method = "REML",
+                test = if (identical(grp$group, "none")) {
+                    "s(time) from summary.gam()"
+                } else if (length(grp$levels) == 2L) {
+                    "difference smooth from summary.gam()"
+                } else {
+                    "anova(m0, m1, test = \"F\"), omnibus over groups"
+                }
             ),
             files = character(0)
         ),
@@ -480,10 +502,7 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
     files <- character(0)
     stem <- if (is.null(group_col)) "trends" else "compare"
     if (!is.null(out_dir)) {
-        files <- mc_trend_write(
-            res, mc_trend_log_lines(obj, n_tax, n_fail, n_hit),
-            out_dir, stem
-        )
+        files <- mc_trend_write(res, out_dir, stem)
     }
     if (isTRUE(plots)) {
         if (is.null(out_dir)) {
@@ -674,6 +693,10 @@ mc_trend_print <- function(x, what) {
             " levels), reference ", s$reference, "\n",
             sep = ""
         )
+        # Which test was used is decided by the number of levels, not by
+        # anything the caller asked for, so it is reported rather than left
+        # to be inferred.
+        cat("  test         : ", s$test, "\n", sep = "")
     }
     cat("  q < ", s$alpha, "     : ", sum(hit), "\n", sep = "")
     if (any(hit)) {

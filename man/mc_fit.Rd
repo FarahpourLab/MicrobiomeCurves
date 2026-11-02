@@ -9,7 +9,8 @@ mc_fit(
   C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
   use_outliers = TRUE,
-  seed = 123
+  seed = 123,
+  verbose = FALSE
 )
 }
 \arguments{
@@ -42,6 +43,12 @@ always kept, even when flagged. If fewer than two trajectories would
 remain, screening is skipped for that taxon.}
 
 \item{seed}{Integer. Random seed for reproducibility of clustering.}
+
+\item{verbose}{Logical. Whether to report progress through the cells as
+the taxa are fitted. A line is emitted every tenth cell on a run of
+fewer than a hundred, and every hundredth cell otherwise, so a long
+run says where it has got to without scrolling. \code{\link[=mc_run]{mc_run()}} passes its
+own \code{verbose} through.}
 }
 \value{
 An object of class \code{"mc_fit"} containing:

@@ -172,6 +172,11 @@ NULL
 #'   always kept, even when flagged. If fewer than two trajectories would
 #'   remain, screening is skipped for that taxon.
 #' @param seed Integer. Random seed for reproducibility of clustering.
+#' @param verbose Logical. Whether to report progress through the cells as
+#'   the taxa are fitted. A line is emitted every tenth cell on a run of
+#'   fewer than a hundred, and every hundredth cell otherwise, so a long
+#'   run says where it has got to without scrolling. [mc_run()] passes its
+#'   own `verbose` through.
 #'
 #' @return
 #' An object of class \code{"mc_fit"} containing:
@@ -222,7 +227,9 @@ NULL
 #' @export
 mc_fit <- function(prep, C = NULL,
                     cluster_method = c("fpca", "kmeans_fd"),
-                    use_outliers = TRUE, seed = 123) {
+                    use_outliers = TRUE, seed = 123, verbose = FALSE) {
+    say <- function(...) if (isTRUE(verbose)) message(...)
+
     # Reproducible for a given seed, but the caller's own random stream is
     # restored when this function returns. See R/rng.R.
     mc_preserve_rng()
@@ -244,20 +251,14 @@ mc_fit <- function(prep, C = NULL,
     dat <- reshaped$dat
     long <- reshaped$long
 
-    # Count FPCA outcomes across the whole run so they can be reported once
-    # rather than at each of the many thousands of individual fits.
-    mc_diag_reset()
-    on.exit(mc_diag_clear(), add = TRUE)
-
     ft <- mc_fit_all_taxa(
         long, taxon_col, species_vec, reps, pred_long,
-        use_outliers, C, seed, cluster_method
+        use_outliers, C, seed, cluster_method, say
     )
     pred_long <- dplyr::mutate(
         ft$pred_long, se = (true_value - imputed_value)^2
     )
 
-    mc_diag_report(nrow(pred_long))
     mc_warn_unimputed(pred_long)
 
     mc_fit_result(

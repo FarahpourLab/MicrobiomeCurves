@@ -1,22 +1,20 @@
 # Writing a run to disk.
 #
-# What is written is the record of the run: the design, the time points in
-# order, every subject-timepoint that was missing and why, any warning
-# raised, and the completed table itself. Someone opening the folder months
-# later should be able to see what was imputed and on what basis, without
-# rerunning anything.
+# What is written is the completed table on each scale the run can honour,
+# and the interval behind every imputed value. Nothing else: the design,
+# the gaps and the warnings are on the returned object, where they can be
+# worked with rather than read back out of text.
 
-#' Write a run's log and completed table to a directory
+#' Write a run's completed tables to a directory
 #'
 #' @param run The `mc_run` object.
 #' @param out_dir Directory to write into. Created if it does not exist.
-#' @param warnings Character vector of warnings raised during the run.
 #'
-#' @return Character vector of the two paths written, invisibly.
+#' @return Character vector of the paths written, invisibly.
 #'
 #' @keywords internal
 #' @noRd
-mc_write_output <- function(run, out_dir, warnings = character(0)) {
+mc_write_output <- function(run, out_dir) {
     if (!dir.exists(out_dir)) {
         ok <- dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
         if (!ok) {
@@ -30,10 +28,11 @@ mc_write_output <- function(run, out_dir, warnings = character(0)) {
     written <- mc_write_tables(run, out_dir)
     written <- c(written, mc_write_uncertainty_table(run, out_dir))
 
-    log <- file.path(out_dir, "imputation_log.txt")
-    writeLines(mc_log_lines(run, warnings), log)
-
-    invisible(c(written, log))
+    # Tables only. The log said what the session already prints while the
+    # run goes and what the returned object carries afterwards: the design
+    # is in run$design, the gaps and their reasons in run$missing, and the
+    # warnings are both re-raised and kept in run$warnings.
+    invisible(written)
 }
 
 #' Write one row of uncertainty per imputed cell

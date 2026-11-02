@@ -31,19 +31,12 @@ mc_safe_fpca <- function(Ly, Lt) {
     obs_count <- vapply(Ly, function(x) sum(!is.na(x)), numeric(1))
     keep <- which(obs_count >= 2)
 
-    mc_diag_bump("calls")
-
     if (length(keep) < 2) {
-        mc_diag_bump("too_few")
         return(NULL)
     }
 
     Ly_sub <- Ly[keep]
     Lt_sub <- Lt[keep]
-
-    if (length(keep) <= 3) {
-        mc_diag_bump("small")
-    }
 
     # fdapace comments on small samples, reset options and gappy designs on
     # every call. Those are collected here and reported once by mc_fit(),
@@ -59,13 +52,16 @@ mc_safe_fpca <- function(Ly, Lt) {
             error = function(e) NULL
         )),
         warning = function(w) {
-            mc_diag_note(conditionMessage(w))
+            # Muffled, not collected. fdapace remarks on small samples,
+            # reset options and gappy designs on every call, and a sparse
+            # longitudinal design raises the same remark for every one of
+            # the many thousands of fits a run makes. Which cells rested on
+            # a usable fit is in FPCA_used in the result.
             invokeRestart("muffleWarning")
         }
     )
 
     if (is.null(fit)) {
-        mc_diag_bump("failed")
         return(NULL)
     }
 

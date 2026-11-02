@@ -355,7 +355,7 @@ test_that("a negative abundance is refused as raw", {
     )
 })
 
-test_that("out_dir writes the completed table and a run log", {
+test_that("out_dir writes the completed tables and nothing else", {
     s <- study(drop = list("M03", 7))
     out <- file.path(tempdir(), "mc_out_test")
     unlink(out, recursive = TRUE)
@@ -366,8 +366,8 @@ test_that("out_dir writes the completed table and a run log", {
         out_dir = out, C = 1, verbose = FALSE
     ))
 
-    # three tables, the uncertainty table, and the log
-    expect_length(run$files, 5)
+    # three scales of the completed table, plus the uncertainty table
+    expect_length(run$files, 4)
     expect_true(any(grepl("imputed_uncertainty[.]tsv$", run$files)))
     expect_true(all(file.exists(run$files)))
 
@@ -380,12 +380,13 @@ test_that("out_dir writes the completed table and a run log", {
         expect_equal(ncol(tbl), ncol(run$completed))
     }
 
-    log <- readLines(file.path(out, "imputation_log.txt"))
-    expect_true(any(grepl("DESIGN", log)))
-    expect_true(any(grepl("time order", log)))
-    expect_true(any(grepl("MISSING", log)))
-    expect_true(any(grepl("M03", log)))
-    expect_true(any(grepl("WARNINGS", log)))
+    # No log is written. What it used to hold is on the object, which is
+    # what a caller can actually work with.
+    expect_false(file.exists(file.path(out, "imputation_log.txt")))
+    expect_false(any(grepl("[.]txt$", list.files(out))))
+    expect_true(all(c("subject", "time", "reason") %in%
+        names(run$design$missing)))
+    expect_true("M03" %in% run$design$missing$subject)
 
     unlink(out, recursive = TRUE)
 })
@@ -399,20 +400,22 @@ test_that("the log records label time points as the user wrote them", {
     out <- file.path(tempdir(), "mc_out_labels")
     unlink(out, recursive = TRUE)
 
-    suppressWarnings(mc_run(
+    run <- suppressWarnings(mc_run(
         s$abundance, s$metadata,
         sample_col = "sample", subject_col = "subject", time_col = "day",
         out_dir = out, C = 1, verbose = FALSE
     ))
 
-    log <- readLines(file.path(out, "imputation_log.txt"))
-    expect_true(any(grepl("visit0", log)))
-    expect_true(any(grepl("at time visit7", log)))
+    # The caller wrote the time points as labels, and the run carries those
+    # labels rather than the positions it works in internally.
+    expect_true("visit0" %in% as.character(run$design$axis$levels))
+    expect_true("visit7" %in% as.character(run$design$missing$time_label))
+    expect_true("visit7" %in% as.character(run$imputed$time_label))
 
     unlink(out, recursive = TRUE)
 })
 
-test_that("a run writes tables and a log, and no figures", {
+test_that("a run writes tables and nothing else", {
     s <- study(drop = list("M03", 7))
     out <- file.path(tempdir(), "mc_no_figures")
     unlink(out, recursive = TRUE)
@@ -431,8 +434,7 @@ test_that("a run writes tables and a log, and no figures", {
     expect_false(any(grepl("[.]png$|[.]pdf$", run$files)))
     expect_setequal(basename(run$files), c(
         "imputed_clr.tsv", "imputed_relative_abundance.tsv",
-        "imputed_counts.tsv", "imputed_uncertainty.tsv",
-        "imputation_log.txt"
+        "imputed_counts.tsv", "imputed_uncertainty.tsv"
     ))
     # Nothing on disk either, not just nothing listed.
     expect_setequal(list.files(out), basename(run$files))

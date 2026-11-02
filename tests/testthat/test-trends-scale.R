@@ -238,7 +238,7 @@ test_that("the scale is applied to the whole table, not to taxa selected", {
 })
 
 
-test_that("the scale reaches the settings, the log and the printout", {
+test_that("the scale reaches the settings and the printout", {
     d <- mc_abund()
     out <- withr::local_tempdir()
 
@@ -251,11 +251,9 @@ test_that("the scale reaches the settings, the log and the printout", {
     expect_identical(tr$settings$transform, "LOG")
 
     # A trend table with no record of the scale it was fitted on cannot be
-    # reproduced, so both the log and the printout have to carry it.
-    log <- readLines(file.path(out, "trends_log.txt"))
-    expect_true(any(grepl("INPUT SCALE", log)))
-    expect_true(any(grepl("normalization  : TSS", log, fixed = TRUE)))
-    expect_true(any(grepl("transform      : LOG", log, fixed = TRUE)))
+    # reproduced, so the printout has to carry it. No log is written.
+    expect_setequal(basename(tr$files), "trends.tsv")
+    expect_false(any(grepl("[.]txt$", list.files(out))))
     expect_output(print(tr), "input scale  : TSS \\+ LOG")
 
     plain <- mc_trends(d$tab, d$meta, "sample", "subject", "time",
@@ -265,24 +263,27 @@ test_that("the scale reaches the settings, the log and the printout", {
 })
 
 
-test_that("the CLR log line names the multiplier actually used", {
+test_that("the CLR scale line names the multiplier actually used", {
     d <- mc_abund()
-    out <- withr::local_tempdir()
 
-    mc_trends(d$tab, d$meta, "sample", "subject", "time",
-        normalization = "CLR", out_dir = out, verbose = FALSE
+    msg <- capture.output(
+        tr <- mc_trends(d$tab, d$meta, "sample", "subject", "time",
+            normalization = "CLR"
+        ),
+        type = "message"
     )
-    log <- readLines(file.path(out, "trends_log.txt"))
 
-    expect_true(any(grepl("pseudocount \"auto\"", log, fixed = TRUE)))
-    expect_true(any(grepl(as.character(mc_zero_mult), log, fixed = TRUE)))
+    # The multiplier actually used is named where the run is reported, so
+    # someone reading the session can see which rule the zeros took.
+    expect_true(any(grepl("pseudocount \"auto\"", msg, fixed = TRUE)))
+    expect_true(any(grepl(as.character(mc_zero_mult), msg, fixed = TRUE)))
+    expect_identical(tr$settings$pseudocount, "auto")
 
-    # One formatter behind both, so a result checked against the log months
-    # later is checked against the same words the console gave.
-    expect_identical(
-        mc_trend_scale_lines("CLR", "NONE", "auto"),
-        log[grep("INPUT SCALE", log, fixed = TRUE) + 1:2]
-    )
+    # One formatter behind the lines, whoever reads them.
+    lines <- mc_trend_scale_lines("CLR", "NONE", "auto")
+    expect_true(all(vapply(
+        lines, function(l) any(grepl(l, msg, fixed = TRUE)), logical(1)
+    )))
 })
 
 
