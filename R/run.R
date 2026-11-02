@@ -210,8 +210,9 @@ mc_detect_missing <- function(
 #'   straight to \code{\link{mc_fit}}. \code{NULL} selects C per taxon by mean
 #'   silhouette width.
 #' @param cluster_method Character, passed to \code{\link{mc_fit}}.
-#' @param use_outliers Logical, passed to \code{\link{mc_fit}}. \code{TRUE}
-#'   enables functional-depth outlier screening.
+#' @param use_outliers Logical, passed to \code{\link{mc_fit}}.
+#'   \code{FALSE}, the default, fits every subject. \code{TRUE} screens
+#'   unusual trajectories out with functional depth first.
 #' @param seed Integer random seed, passed to \code{\link{mc_fit}}.
 #' @param min_observed Integer. Observed time-point count below which a
 #'   subject stops the run. Default \code{2}.
@@ -299,7 +300,7 @@ setMethod("mc_run", "data.frame", function(
     out_dir = NULL,
     C = NULL,
     cluster_method = c("fpca", "kmeans_fd"),
-    use_outliers = TRUE,
+    use_outliers = FALSE,
     seed = 123,
     min_observed = 2,
     verbose = TRUE,
@@ -328,7 +329,7 @@ setMethod("mc_run", "matrix", function(
     out_dir = NULL,
     C = NULL,
     cluster_method = c("fpca", "kmeans_fd"),
-    use_outliers = TRUE,
+    use_outliers = FALSE,
     seed = 123,
     min_observed = 2,
     verbose = TRUE,
@@ -371,7 +372,7 @@ setMethod("mc_run", "matrix", function(
 #' @keywords internal
 #' @noRd
 mc_run_wide <- function(dat, taxon_col = "OTU_ID", C = NULL,
-                         cluster_method = "fpca", use_outliers = TRUE,
+                         cluster_method = "fpca", use_outliers = FALSE,
                          seed = 123, times = NULL, parse_fun = NULL,
                          make_col = NULL, min_observed = 2, verbose = TRUE,
                          subject_label = identity) {

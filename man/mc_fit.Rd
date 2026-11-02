@@ -8,7 +8,7 @@ mc_fit(
   prep,
   C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
-  use_outliers = TRUE,
+  use_outliers = FALSE,
   seed = 123,
   verbose = FALSE
 )
@@ -36,11 +36,17 @@ common here once outliers are dropped; those cases fall back to
 the fit.}
 }}
 
-\item{use_outliers}{Logical. If \code{TRUE} (the default), trajectories are
-screened with Fraiman-Muniz functional depth and those below the 5\\%
-quantile are dropped before the model is refitted. The target subject is
-always kept, even when flagged. If fewer than two trajectories would
-remain, screening is skipped for that taxon.}
+\item{use_outliers}{Logical. \code{FALSE}, the default, fits every
+subject. \code{TRUE} screens trajectories with Fraiman-Muniz
+functional depth and drops those below the 5\\% quantile before the
+model is refitted; the target subject is always kept, even when
+flagged, and if fewer than two trajectories would remain, screening is
+skipped for that taxon.
+
+Screening is off by default because a subject it drops is still given
+an imputed value but is left out of \code{clusters}, and
+\code{\link{mc_ci}} and \code{\link{mc_plot}} cannot then report
+that cell.}
 
 \item{seed}{Integer. Random seed for reproducibility of clustering.}
 

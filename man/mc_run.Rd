@@ -20,7 +20,7 @@ mc_run(dat, ...)
   out_dir = NULL,
   C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
-  use_outliers = TRUE,
+  use_outliers = FALSE,
   seed = 123,
   min_observed = 2,
   verbose = TRUE,
@@ -39,7 +39,7 @@ mc_run(dat, ...)
   out_dir = NULL,
   C = NULL,
   cluster_method = c("fpca", "kmeans_fd"),
-  use_outliers = TRUE,
+  use_outliers = FALSE,
   seed = 123,
   min_observed = 2,
   verbose = TRUE,
@@ -97,8 +97,9 @@ silhouette width.}
 
 \item{cluster_method}{Character, passed to \code{\link{mc_fit}}.}
 
-\item{use_outliers}{Logical, passed to \code{\link{mc_fit}}. \code{TRUE}
-enables functional-depth outlier screening.}
+\item{use_outliers}{Logical, passed to \code{\link{mc_fit}}.
+\code{FALSE}, the default, fits every subject. \code{TRUE} screens
+unusual trajectories out with functional depth first.}
 
 \item{seed}{Integer random seed, passed to \code{\link{mc_fit}}.}
 
