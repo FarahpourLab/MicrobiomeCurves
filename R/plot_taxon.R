@@ -70,7 +70,7 @@
 #'
 #' @importFrom ggplot2 ggplot aes geom_line geom_point geom_errorbar
 #'   labs theme_minimal scale_color_manual scale_shape_manual
-#'   scale_x_continuous
+#'   scale_x_continuous guides guide_legend element_text
 #' @export
 mc_plot <- function(run, taxon, subject) {
     if (missing(subject)) {
@@ -124,31 +124,36 @@ mc_plot <- function(run, taxon, subject) {
         ggplot2::aes(
             x = .data$time, y = .data$value, colour = "this subject"
         ),
-        linewidth = 0.9, na.rm = TRUE
+        linewidth = 1.3, na.rm = TRUE
     )
 
     # One bar per imputed point, not a band across them. A band would be
     # drawn over the observed points that lie between two imputed ones, and
     # so would claim uncertainty about values that were measured.
+    #
+    # The colour is mapped rather than fixed so the bars earn a key in the
+    # legend: a reader should not have to guess what the orange means.
     if (nrow(imp) > 0) {
         p <- p + ggplot2::geom_errorbar(
             data = imp,
             ggplot2::aes(
-                x = .data$time, ymin = .data$lower, ymax = .data$upper
+                x = .data$time, ymin = .data$lower, ymax = .data$upper,
+                colour = mc_interval_label()
             ),
-            width = 0.12, linewidth = 0.5, colour = "#D55E00", na.rm = TRUE
+            width = 0.18, linewidth = 1.1, na.rm = TRUE
         )
     }
 
     # Shape carries observed against imputed, so the two are told apart in
-    # print and by a reader who cannot rely on colour.
+    # print and by a reader who cannot rely on colour. The points are drawn
+    # in their own colour, darker than the line they sit on, so the marks
+    # stay legible against it.
     p <- p + ggplot2::geom_point(
         data = target,
         ggplot2::aes(
-            x = .data$time, y = .data$value, shape = .data$source,
-            colour = "this subject"
+            x = .data$time, y = .data$value, shape = .data$source
         ),
-        size = 2.6, na.rm = TRUE
+        colour = "#14213D", size = 4, stroke = 0.9, na.rm = TRUE
     )
 
     # The run works in positions along the time axis, but the caller may
@@ -164,12 +169,16 @@ mc_plot <- function(run, taxon, subject) {
     }
 
     n_sub <- length(unique(tr$subject))
+    keys <- c("this subject", "other subjects")
+    if (nrow(imp) > 0) keys <- c(keys, mc_interval_label())
+
     p +
         ggplot2::scale_color_manual(
-            values = c(
-                "this subject" = "#0072B2", "other subjects" = "grey65"
+            values = stats::setNames(
+                c("#0072B2", "grey70", "#D55E00"),
+                c("this subject", "other subjects", mc_interval_label())
             ),
-            breaks = c("this subject", "other subjects"),
+            breaks = keys,
             name = NULL
         ) +
         ggplot2::scale_shape_manual(
@@ -177,17 +186,64 @@ mc_plot <- function(run, taxon, subject) {
             breaks = c("observed", "imputed"),
             name = NULL
         ) +
+        ggplot2::guides(
+            shape = ggplot2::guide_legend(
+                override.aes = list(colour = "#14213D", size = 4)
+            )
+        ) +
         ggplot2::labs(
             title = mc_plot_title(taxon),
             subtitle = paste0(
-                "subject ", subject, " of ", n_sub, ", with ", nrow(imp),
-                " imputed value(s) and their intervals"
+                "Subject ", subject, " of ", n_sub, ", with ", nrow(imp),
+                " imputed value(s)"
             ),
-            x = "time",
-            y = "abundance"
+            x = "Time point",
+            y = mc_plot_ylab(run)
         ) +
-        ggplot2::theme_minimal()
+        ggplot2::theme_minimal(base_size = 13) +
+        ggplot2::theme(
+            plot.title = ggplot2::element_text(hjust = 0.5, face = "bold"),
+            plot.subtitle = ggplot2::element_text(hjust = 0.5)
+        )
 }
+
+
+#' What the values are, for the value axis
+#'
+#' @description
+#' The run knows what it was given. Saying "abundance" when the numbers are
+#' centred log ratios would invite a reader to treat a negative value as an
+#' error, so the scale is named.
+#'
+#' @param run The `mc_run` object.
+#'
+#' @return A single string.
+#'
+#' @keywords internal
+#' @noRd
+mc_plot_ylab <- function(run) {
+    if (identical(run$abundance_type, "clr")) {
+        "CLR abundance"
+    } else {
+        "Abundance"
+    }
+}
+
+
+#' The legend key for the interval
+#'
+#' @description
+#' A prediction interval, not a confidence interval: it carries the
+#' residual variance as well as the uncertainty in the fitted curve, since
+#' what is being estimated is one unobserved value rather than the mean
+#' curve. Named in one place so the plot and its documentation cannot
+#' describe it differently.
+#'
+#' @return A single string.
+#'
+#' @keywords internal
+#' @noRd
+mc_interval_label <- function() "95% prediction interval"
 
 
 #' Settle which subject the plot is about
