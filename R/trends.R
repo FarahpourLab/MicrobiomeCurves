@@ -630,12 +630,21 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                 } else {
                     paste0("REML, family = ", family, "()")
                 },
+                # Named for what was actually done. mgcv overrides the
+                # requested F test when the family fixes the scale, so a
+                # count comparison of three or more groups is a
+                # chi-squared one however the call was written.
                 test = if (identical(grp$group, "none")) {
                     "s(time) from summary.gam()"
                 } else if (length(grp$levels) == 2L) {
                     "difference smooth from summary.gam()"
-                } else {
+                } else if (identical(family, "gaussian")) {
                     "anova(m0, m1, test = \"F\"), omnibus over groups"
+                } else {
+                    paste0(
+                        "anova(m0, m1), omnibus over groups, chi-squared ",
+                        "on the family's fixed scale"
+                    )
                 }
             ),
             files = character(0)

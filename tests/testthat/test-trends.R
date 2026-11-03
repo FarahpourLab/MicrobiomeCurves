@@ -1029,3 +1029,82 @@ test_that("a non-Gaussian family still chooses k from candidates", {
         expect_true(nb$results$converged, info = sel)
     }
 })
+
+mc_tcnt_grp <- function(n_sub = 24, n_arm = 3, seed = 21) {
+    cd <- mc_tcnt(n_sub = n_sub, seed = seed)
+    arms <- c("ctrl", "lowdose", "highdose")[seq_len(n_arm)]
+    subs <- unique(cd$meta$subject)
+    cd$meta$arm <- rep(arms, length.out = length(subs))[
+        match(cd$meta$subject, subs)
+    ]
+    cd
+}
+
+
+test_that("a family carries through a two-condition comparison", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt_grp(n_arm = 2)
+
+    cm <- mc_compare(cd$tab, cd$meta, "sample", "subject", "time",
+        group_col = "arm", family = "nb", depth = "libsize",
+        taxa = c("Rising", "Flat"), verbose = FALSE
+    )
+
+    expect_identical(cm$settings$family, "nb")
+    expect_identical(unique(cm$results$n_groups), 2L)
+    # Two levels leave one difference smooth, so the test is read off the
+    # one fit and the statistic column is populated as it always was.
+    expect_identical(cm$settings$test, "difference smooth from summary.gam()")
+    expect_true(all(cm$results$converged))
+    expect_true(all(is.finite(cm$results$F)))
+})
+
+test_that("a family carries through a multi-condition omnibus", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt_grp(n_arm = 3)
+
+    cm <- mc_compare(cd$tab, cd$meta, "sample", "subject", "time",
+        group_col = "arm", family = "nb", depth = "libsize",
+        taxa = c("Rising", "Flat"), verbose = FALSE
+    )
+
+    expect_identical(unique(cm$results$n_groups), 3L)
+    expect_true(all(cm$results$converged))
+    expect_true(all(is.na(cm$results$note)))
+    # mgcv overrides the requested F test for a family whose scale is
+    # fixed, so the nested comparison is a chi-squared one and the result
+    # says that rather than repeating the call that was written.
+    expect_match(cm$settings$test, "chi-squared")
+    # The statistic is the deviance difference the p-value came from, not
+    # a missing value sitting next to a p-value that exists.
+    expect_true(all(is.finite(cm$results$F)))
+    expect_true(all(cm$results$F > 0))
+})
+
+test_that("a gaussian omnibus still reports the F test it gets", {
+    skip_if_not_installed("mgcv")
+    meta <- mc_td(n_sub = 18)
+    meta$arm <- rep(c("a", "b", "c"), length.out = 18)[
+        match(meta$subject, unique(meta$subject))
+    ]
+    tab <- mc_tt(meta, list(X = function(d) 0.4 * d$time))
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", verbose = FALSE
+    )
+    expect_match(cm$settings$test, "test = \"F\"")
+    expect_false(grepl("chi-squared", cm$settings$test, fixed = TRUE))
+})
+
+test_that("a Tweedie comparison works across conditions", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt_grp(n_arm = 3)
+
+    cm <- mc_compare(cd$tab, cd$meta, "sample", "subject", "time",
+        group_col = "arm", normalization = "TSS", family = "tw",
+        taxa = c("Rising", "Flat"), verbose = FALSE
+    )
+    expect_identical(cm$settings$family, "tw")
+    expect_true(all(cm$results$converged))
+    expect_null(cm$settings$depth)
+})

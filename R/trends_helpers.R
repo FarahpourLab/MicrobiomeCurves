@@ -1128,7 +1128,14 @@ mc_trend_read_smooth <- function(m, want = NULL) {
 #' The p-value is approximate: the smoothing parameters were estimated rather
 #' than known, which `mgcv::anova.gam` documents as a limitation of the test.
 #'
-#' One consequence of that has to be handled here. Each model chooses its own
+#' Two consequences have to be handled here. The first is the test
+#' statistic. `anova.gam()` is asked for an F test, and for a family whose
+#' scale is fixed it overrides that and tests on the chi-squared scale,
+#' returning a table with a `Pr(>Chi)` column and no statistic column at
+#' all. The deviance difference is the statistic in that case, so it is
+#' read from there.
+#'
+#' The second: each model chooses its own
 #' smoothing parameters, so adding the group smooths can leave the deviance
 #' no lower than the null model's. `mgcv` then cannot form the F statistic
 #' and returns nothing. That is not a failed fit: it says the group smooths
@@ -1152,6 +1159,20 @@ mc_trend_read_anova <- function(m0, m1) {
     fv <- if (is.na(fcol)) NA_real_ else a[[fcol]]
     pv <- pv[!is.na(pv)]
     fv <- fv[!is.na(fv)]
+
+    # A family with a fixed scale is tested on the chi-squared scale, and
+    # mgcv then builds the table with no statistic column of its own -
+    # whatever test was asked for. The deviance difference is that
+    # statistic: Pr(>Chi) was computed from it. Reporting it beats leaving
+    # the column empty next to a p-value that plainly exists, which reads
+    # like a fit that failed.
+    if (length(fv) == 0L && length(pv) > 0L) {
+        dv <- a[["Deviance"]]
+        dv <- dv[!is.na(dv)]
+        if (length(dv) > 0L) {
+            fv <- dv
+        }
+    }
 
     st <- summary(m1)$s.table
     by_rows <- if (is.null(st)) integer(0) else {
