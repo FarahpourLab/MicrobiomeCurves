@@ -137,15 +137,14 @@ run <- mc_run(
 
 ## Writing results to disk
 
-Give `out_dir` and the run writes five files:
+Give `out_dir` and the run writes four files:
 
 | file | contents |
 | --- | --- |
 | `imputed_clr.tsv` | the completed table on the CLR scale produced by the model |
 | `imputed_relative_abundance.tsv` | proportions that sum to one within each sample |
 | `imputed_counts.tsv` | proportions multiplied by a library size |
-| `imputation_log.txt` | design, time order, gaps, output scales and warnings |
-| `uncertainty_by_taxon.pdf` | one page per taxon, with intervals |
+| `imputed_uncertainty.tsv` | one row per imputed value, with its interval |
 
 The model produces values on the CLR scale. Relative abundances and counts are
 derived from those values. Converting CLR values to proportions uses a
@@ -166,8 +165,7 @@ are unavailable. The relative abundances are therefore strictly positive, so
 an original zero appears as a small positive value. The counts output uses
 one library size for the whole table. This size is inferred from the rarest
 taxon and capped. The resulting counts are on a plausible scale, not the
-original count scale. The log records which case applied, so the results
-folder describes how its derived scales were produced.
+original count scale.
 
 ```{r outdir}
 out <- file.path(tempdir(), "mc_example")
@@ -178,23 +176,15 @@ run <- suppressWarnings(mc_run(
 ))
 
 basename(run$files)
-cat(head(readLines(file.path(out, "imputation_log.txt")), 12), sep = "
-")
 ```
 
-The uncertainty pages are what to look at before treating imputed values as
-data. Each page shows every value imputed for one taxon with its interval, so
+The uncertainty table is what to look at before treating imputed values as
+data. It holds every value imputed for one taxon with its interval, so
 a taxon whose gaps rest on very little information declares itself:
 
 ```{r unc}
 mc_uncertainty(run, rownames(demo$abundance)[1])
 ```
-
-`plots = FALSE` turns the drawing off. `plot_format = "png"` or `"both"`
-writes one PNG per page into the `uncertainty_png` subdirectory of `out_dir`.
-A taxon with many imputed values can span several pages and therefore produce
-several PNG files. PNG files are written at `dpi`, which defaults to 300. The
-PDF uses vector graphics, so `dpi` does not apply to it.
 
 Results come back under your own sample names, ordered by subject and then
 time:
