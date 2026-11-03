@@ -16,6 +16,8 @@ mc_trends(
   pseudocount = "auto",
   covariates = NULL,
   k = NULL,
+  k_select = c("aic", "loo", "variance"),
+  k_var = 0.99,
   subject_effect = c("intercept", "slope", "smooth", "none"),
   taxa = NULL,
   p_adjust = "BH",
@@ -74,7 +76,29 @@ smallest positive value in the taxon.}
 They enter as parametric terms, shifting the curve without a shape of
 their own, and no test is reported for them.}
 
-\item{k}{Spline basis size, or \code{NULL} to read it from the design.}
+\item{k}{Spline basis size. \code{NULL}, the default, takes the largest the
+design supports: one fewer than the number of distinct time points. A
+single number sets it. Several numbers are candidates rather than a
+size, and each taxon keeps the one \code{k_select} prefers, capped by the
+time points that taxon actually has. The chosen size is reported in
+the \code{k} column of \code{results}.}
+
+\item{k_select}{How a candidate \code{k} is chosen, used only when \code{k} holds
+more than one value. \code{"aic"} takes the lowest AIC. \code{"loo"} takes the
+lowest leave-one-out mean squared error, computed in closed form from
+the leverages rather than by refitting; note that it leaves out one
+sample and not one subject, so with repeated measures it flatters the
+larger bases. \code{"variance"} takes the smallest candidate whose deviance
+explained reaches \code{k_var} of the largest candidate's, which asks for
+the smallest basis that loses nothing worth keeping rather than for
+the best-fitting one.}
+
+\item{k_var}{The fraction used by \code{k_select = "variance"}, between 0 and
+\enumerate{
+\item It is a fraction of what the largest candidate explains, not an
+absolute deviance explained: few microbiome taxa reach 0.99 of their
+own variance, and a threshold none of them clears would choose nothing.
+}}
 
 \item{subject_effect}{One of \code{"intercept"}, \code{"slope"}, \code{"smooth"} or
 \code{"none"}.}
@@ -99,7 +123,8 @@ taxon. Forking only; ignored on Windows.}
 \value{
 An object of class \code{mc_trends} with
 \itemize{
-\item \code{results}: one row per taxon, ordered by \code{q_value}.
+\item \code{results}: one row per taxon, ordered by \code{q_value}. The \code{k}
+column holds the basis size that taxon was fitted with.
 \item \code{design}, \code{abundance}: what was fitted, kept so a follow-up can
 refit a taxon without the models being stored.
 \item \code{settings}: the resolved \code{k}, subject term and covariates.

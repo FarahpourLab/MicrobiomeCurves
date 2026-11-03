@@ -40,7 +40,12 @@ mc_trend_refit <- function(obj, taxon) {
     d$subject <- factor(d$subject)
     if (!identical(s$group, "none")) d$mc_grp <- droplevels(d$mc_grp)
 
-    kk <- min(s$k, length(unique(d$time)) - 1L)
+    # The fit behind the figure has to be the fit behind the p-value, so
+    # the basis size comes from the row rather than from the settings:
+    # with candidate k the settings hold the candidates, not the choice.
+    kk <- obj$results$k[match(taxon, obj$results$taxon)]
+    if (length(kk) != 1L || is.na(kk)) kk <- max(s$k)
+    kk <- min(kk, length(unique(d$time)) - 1L)
     f <- mc_trend_formula(
         mc_trend_terms(kk, s$subject_effect, s$covariates, s$group, TRUE)
     )
@@ -105,14 +110,13 @@ mc_trend_grid <- function(d, group, covariates = NULL, n_points = 200) {
 #' One taxon's figure
 #'
 #' @description
-#' The fitted trajectory with a 95 percent band, the observed points behind
-#' it, and for a two-group comparison a second panel holding the difference
-#' between the curves with the band that says where it leaves zero.
+#' The fitted trajectory with a 95 percent band and the observed points
+#' behind it. A grouped comparison draws one curve per group.
 #'
 #' @param obj An `mc_trends` or `mc_compare` object.
 #' @param taxon The taxon's name.
 #'
-#' @return A `ggplot` or a `patchwork` of two.
+#' @return A `ggplot`.
 #'
 #' @keywords internal
 #' @noRd
@@ -206,79 +210,7 @@ mc_trend_panel <- function(obj, taxon) {
         ) +
         mc_trend_theme()
 
-    diff <- mc_trend_diff_panel(obj, m, d)
-    if (is.null(diff)) {
-        return(curves)
-    }
-    patchwork::wrap_plots(curves, diff, ncol = 1, heights = c(2, 1))
-}
-
-
-#' The difference panel, for a two-group comparison
-#'
-#' @description
-#' Only the ordered parameterisation holds a single difference smooth, so
-#' only then is there one curve to draw. With `reference = "global"` there
-#' are as many departures as there are groups and the comparison between any
-#' two of them belongs in a pairwise follow-up, not here.
-#'
-#' @param obj The result object.
-#' @param m The refitted model.
-#' @param d The data it was fitted to.
-#'
-#' @return A `ggplot`, or `NULL` when there is no single difference term.
-#'
-#' @keywords internal
-#' @noRd
-mc_trend_diff_panel <- function(obj, m, d) {
-    s <- obj$settings
-    if (!identical(s$group, "ordered") || nlevels(d$mc_grp) != 2L) {
-        return(NULL)
-    }
-    labs <- vapply(m$smooth, function(x) x$label, character(1))
-    want <- labs[grepl("):", labs, fixed = TRUE)]
-    if (length(want) != 1L) {
-        return(NULL)
-    }
-
-    nd <- mc_trend_grid(d, s$group, s$covariates)
-    nd <- nd[nd$mc_grp == levels(d$mc_grp)[2], , drop = FALSE]
-    tr <- stats::predict(m, nd, type = "terms", terms = want, se.fit = TRUE)
-
-    g <- data.frame(
-        time = nd$time,
-        diff = as.numeric(tr$fit[, 1]),
-        se = as.numeric(tr$se.fit[, 1])
-    )
-    g$lo <- g$diff - 1.96 * g$se
-    g$hi <- g$diff + 1.96 * g$se
-    # Where the band clears zero is where the two trajectories are
-    # distinguishable, which is the "when" that a single p-value cannot say.
-    g$out <- g$lo > 0 | g$hi < 0
-
-    ggplot2::ggplot(g, ggplot2::aes(x = .data$time)) +
-        ggplot2::geom_hline(yintercept = 0, linetype = 2, colour = "grey40") +
-        ggplot2::geom_ribbon(
-            ggplot2::aes(ymin = .data$lo, ymax = .data$hi),
-            fill = "grey30", alpha = 0.2
-        ) +
-        ggplot2::geom_line(
-            ggplot2::aes(y = .data$diff),
-            colour = "grey15", linewidth = 0.8
-        ) +
-        ggplot2::geom_point(
-            data = g[g$out, , drop = FALSE],
-            ggplot2::aes(y = .data$diff), colour = "firebrick", size = 0.7
-        ) +
-        ggplot2::labs(
-            x = s$time_col,
-            y = paste0(levels(d$mc_grp)[2], " - ", levels(d$mc_grp)[1]),
-            caption = paste0(
-                "red where the 95% band excludes zero; ",
-                "covariates held at a reference value"
-            )
-        ) +
-        ggplot2::theme_minimal()
+    curves
 }
 
 
@@ -375,8 +307,7 @@ mc_trend_theme <- function() {
 #' @param dpi Resolution of the written images, in dots per inch.
 #' @param verbose Logical. Whether to report what was written.
 #'
-#' @return One taxon gives the figure itself: a `ggplot`, or for a grouped
-#'   comparison with a difference panel a `patchwork` of two. Several give a
+#' @return One taxon gives the figure itself, a `ggplot`. Several give a
 #'   list of them, named by taxon, so `p[[2]]` or `print(p)` draws them one
 #'   at a time. When `out_dir` was written to, the return is invisible.
 #'

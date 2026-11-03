@@ -24,8 +24,7 @@ or \code{NULL} to return them without writing. Created if it does not exist.}
 \item{verbose}{Logical. Whether to report what was written.}
 }
 \value{
-One taxon gives the figure itself: a \code{ggplot}, or for a grouped
-comparison with a difference panel a \code{patchwork} of two. Several give a
+One taxon gives the figure itself, a \code{ggplot}. Several give a
 list of them, named by taxon, so \code{p[[2]]} or \code{print(p)} draws them one
 at a time. When \code{out_dir} was written to, the return is invisible.
 }
