@@ -1,8 +1,10 @@
 #' Flag outlying trajectories by functional depth
 #'
 #' @description
-#' Fits FPCA to the supplied trajectories and marks those whose Fraiman-Muniz
-#' depth falls below the `alpha` quantile.
+#' Marks the trajectories whose Fraiman-Muniz depth falls below the `alpha`
+#' quantile. The depths themselves come from [mc_depth_scores()], so the
+#' screening used by the imputation and the one reported by
+#' [mc_detect_outliers()] are the same computation.
 #'
 #' @param Ly List of numeric vectors, one per subject, holding the observed
 #'   values.
@@ -16,47 +18,19 @@
 #' @keywords internal
 #' @noRd
 detect_outliers_depth <- function(Ly, Lt, alpha = 0.05) {
-
-    if (!requireNamespace("fda.usc", quietly = TRUE)) {
-        stop("Package 'fda.usc' required for depth-based outliers")
+    depth_vals <- mc_depth_scores(Ly, Lt)
+    if (all(is.na(depth_vals))) {
+        return(rep(FALSE, length(Ly)))
     }
 
-    fp <- mc_safe_fpca(Ly, Lt)
-    if (is.null(fp)) return(rep(FALSE, length(Ly)))
-
-    curves <- fitted(fp)
-    grid <- fp$workGrid
-
-    fdata_obj <- fda.usc::fdata(curves, argvals = grid)
-
-    depth_obj <- fda.usc::depth.FM(fdata_obj)
-    depth_vals <- depth_obj$dep
-
+    # The quantile is taken over the subjects FPCA could use, so a subject
+    # it could not use neither sets the cutoff nor falls below it.
     cutoff <- quantile(depth_vals, alpha, na.rm = TRUE)
-
-    outliers <- depth_vals < cutoff
-
-    # mc_safe_fpca() fits only the subjects with at least two observations, so
-    # `outliers` is indexed against those, not against every subject in Ly. Map
-    # it back to full length; a subject FPCA could not use is not an outlier.
-    #
-    # When every subject was usable this is the identity, which is the case the
-    # benchmark drivers always produce. Without it, the caller's
-    # `names(outliers) <- names(Ly)` fails on any sparser input.
-    obs_count <- vapply(Ly, function(x) sum(!is.na(x)), numeric(1))
-    keep <- which(obs_count >= 2)
-
-    if (length(outliers) == length(Ly)) {
-        return(outliers)
-    }
-
-    out <- rep(FALSE, length(Ly))
-    if (length(outliers) == length(keep)) {
-        out[keep] <- outliers
-    }
-
-    return(out)
+    out <- depth_vals < cutoff
+    out[is.na(out)] <- FALSE
+    unname(out)
 }
+
 
 #' Silhouette-based selection of cluster number
 #'
