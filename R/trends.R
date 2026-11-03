@@ -101,7 +101,25 @@
 #' @param covariates Character vector of `metadata` columns to adjust for.
 #'   They enter as parametric terms, shifting the curve without a shape of
 #'   their own, and no test is reported for them.
-#' @param k Spline basis size, or `NULL` to read it from the design.
+#' @param k Spline basis size. `NULL`, the default, takes the largest the
+#'   design supports: one fewer than the number of distinct time points. A
+#'   single number sets it. Several numbers are candidates rather than a
+#'   size, and each taxon keeps the one `k_select` prefers, capped by the
+#'   time points that taxon actually has. The chosen size is reported in
+#'   the `k` column of `results`.
+#' @param k_select How a candidate `k` is chosen, used only when `k` holds
+#'   more than one value. `"aic"` takes the lowest AIC. `"loo"` takes the
+#'   lowest leave-one-out mean squared error, computed in closed form from
+#'   the leverages rather than by refitting; note that it leaves out one
+#'   sample and not one subject, so with repeated measures it flatters the
+#'   larger bases. `"variance"` takes the smallest candidate whose deviance
+#'   explained reaches `k_var` of the largest candidate's, which asks for
+#'   the smallest basis that loses nothing worth keeping rather than for
+#'   the best-fitting one.
+#' @param k_var The fraction used by `k_select = "variance"`, between 0 and
+#'   1. It is a fraction of what the largest candidate explains, not an
+#'   absolute deviance explained: few microbiome taxa reach 0.99 of their
+#'   own variance, and a threshold none of them clears would choose nothing.
 #' @param subject_effect One of `"intercept"`, `"slope"`, `"smooth"` or
 #'   `"none"`.
 #' @param taxa Character vector of taxa to test, or `NULL` for all.
@@ -118,7 +136,8 @@
 #'
 #' @return An object of class `mc_trends` with
 #' \itemize{
-#'   \item `results`: one row per taxon, ordered by `q_value`.
+#'   \item `results`: one row per taxon, ordered by `q_value`. The `k`
+#'     column holds the basis size that taxon was fitted with.
 #'   \item `design`, `abundance`: what was fitted, kept so a follow-up can
 #'     refit a taxon without the models being stored.
 #'   \item `settings`: the resolved `k`, subject term and covariates.
@@ -163,6 +182,8 @@ mc_trends <- function(abundance, metadata,
                       pseudocount = "auto",
                       covariates = NULL,
                       k = NULL,
+                      k_select = c("aic", "loo", "variance"),
+                      k_var = 0.99,
                       subject_effect = c("intercept", "slope", "smooth", "none"),
                       taxa = NULL,
                       p_adjust = "BH",
@@ -173,6 +194,8 @@ mc_trends <- function(abundance, metadata,
     subject_effect <- match.arg(subject_effect)
     normalization <- match.arg(normalization)
     transform <- match.arg(transform)
+    k_select <- match.arg(k_select)
+    mc_trend_check_k_var(k_var)
 
     mc_trend_run(
         abundance = abundance, metadata = metadata,
@@ -181,7 +204,8 @@ mc_trends <- function(abundance, metadata,
         normalization = normalization, transform = transform,
         pseudocount = pseudocount,
         group_col = NULL, reference = NULL,
-        covariates = covariates, k = k, subject_effect = subject_effect,
+        covariates = covariates, k = k, k_select = k_select,
+        k_var = k_var, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
         out_dir = out_dir, n_cores = n_cores, verbose = verbose
     )
@@ -302,6 +326,8 @@ mc_compare <- function(abundance, metadata,
                        pseudocount = "auto",
                        covariates = NULL,
                        k = NULL,
+                       k_select = c("aic", "loo", "variance"),
+                       k_var = 0.99,
                        subject_effect = c("intercept", "slope", "smooth", "none"),
                        taxa = NULL,
                        p_adjust = "BH",
@@ -312,6 +338,8 @@ mc_compare <- function(abundance, metadata,
     subject_effect <- match.arg(subject_effect)
     normalization <- match.arg(normalization)
     transform <- match.arg(transform)
+    k_select <- match.arg(k_select)
+    mc_trend_check_k_var(k_var)
 
     if (missing(group_col) || is.null(group_col)) {
         stop(
@@ -331,7 +359,8 @@ mc_compare <- function(abundance, metadata,
         normalization = normalization, transform = transform,
         pseudocount = pseudocount,
         group_col = group_col, reference = reference,
-        covariates = covariates, k = k, subject_effect = subject_effect,
+        covariates = covariates, k = k, k_select = k_select,
+        k_var = k_var, subject_effect = subject_effect,
         taxa = taxa, p_adjust = p_adjust, alpha = alpha,
         out_dir = out_dir, n_cores = n_cores, verbose = verbose
     )
@@ -354,7 +383,8 @@ mc_compare <- function(abundance, metadata,
 mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                          time_col, taxon_col, normalization, transform,
                          pseudocount, group_col, reference,
-                         covariates, k, subject_effect, taxa, p_adjust,
+                         covariates, k, k_select, k_var, subject_effect,
+                         taxa, p_adjust,
                          alpha, out_dir, n_cores, verbose) {
     say <- function(...) if (isTRUE(verbose)) message(...)
 
@@ -393,7 +423,20 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
         length(unique(design$subject)), " subjects, ",
         length(unique(design$time)), " time points"
     )
-    say("  k              : ", k, if (is.null(k)) "" else "")
+    say("  k              : ", if (length(k) == 1L) {
+        k
+    } else {
+        paste0(
+            mc_fmt_some(k), ", chosen per taxon by ",
+            if (identical(k_select, "aic")) {
+                "AIC"
+            } else if (identical(k_select, "loo")) {
+                "leave-one-out MSE"
+            } else {
+                paste0(k_var, " of the largest candidate's deviance")
+            }
+        )
+    })
     say("  subject effect : ", subject_effect)
     # Reported only when something was applied. Silence is the default case
     # and saying so on every run would bury the lines that vary.
@@ -426,7 +469,8 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
         d <- design
         d$value <- as.numeric(mat[i, ])
         mc_trend_fit_one(
-            d, k, subject_effect, covariates, grp$group, rownames(mat)[i]
+            d, k, subject_effect, covariates, grp$group, rownames(mat)[i],
+            k_select, k_var
         )
     }
     res <- do.call(rbind, mc_trend_apply(n_tax, one, n_cores, verbose))
@@ -455,7 +499,8 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
             design = design,
             abundance = mat,
             settings = list(
-                k = k, subject_effect = subject_effect,
+                k = k, k_select = k_select, k_var = k_var,
+                subject_effect = subject_effect,
                 covariates = covariates, group_col = group_col,
                 normalization = normalization, transform = transform,
                 pseudocount = pseudocount,
@@ -468,14 +513,11 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                 # reproduced, and because nothing else records the choice:
                 # the number of group levels decides the test, and that is
                 # not visible from the table of p-values.
-                formula = paste(
-                    "value ~",
-                    paste(
-                        mc_trend_terms(
-                            k, subject_effect, covariates, grp$group, TRUE
-                        ),
-                        collapse = " + "
-                    )
+                # With candidates there is no one k to print, and printing
+                # any single one of them would misreport every taxon that
+                # chose another. The per-taxon sizes are in results$k.
+                formula = mc_trend_formula_text(
+                    k, subject_effect, covariates, grp$group
                 ),
                 method = "REML",
                 test = if (identical(grp$group, "none")) {

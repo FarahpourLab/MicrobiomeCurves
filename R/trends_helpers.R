@@ -234,18 +234,21 @@ mc_trend_align <- function(design, mat, verbose = TRUE) {
 }
 
 
-#' Resolve the basis size
+#' Resolve the basis size, or the candidates to choose one from
 #'
 #' @description
 #' mgcv defaults to `k = 10`, which needs ten distinct values of the
 #' covariate and fails outright below that. Most longitudinal microbiome
 #' designs have fewer time points than that, so the default here is read
-#' from the design instead.
+#' from the design instead: `NULL` takes the largest basis the time points
+#' can support. A vector is not a basis size but a set of candidates, and
+#' the choice between them is made per taxon by [mc_trend_choose_k()].
 #'
 #' @param times Numeric vector of observed times.
-#' @param k The caller's `k`, or `NULL`.
+#' @param k The caller's `k`: `NULL`, one number, or several.
 #'
-#' @return An integer basis size.
+#' @return An integer vector. Length one is a fixed basis size; longer is
+#'   a candidate set.
 #'
 #' @keywords internal
 #' @noRd
@@ -258,21 +261,170 @@ mc_trend_k <- function(times, k = NULL) {
             call. = FALSE
         )
     }
+    # The largest basis the design can support. A smooth needs one fewer
+    # basis function than it has distinct values of the covariate, so this
+    # is the ceiling for every branch below as well as the default.
+    k_max <- as.integer(n - 1L)
     if (is.null(k)) {
-        return(as.integer(min(n - 1L, 10L)))
+        return(k_max)
     }
-    if (length(k) != 1L || !is.finite(k) || k < 3L) {
-        stop("k must be a single number of at least 3.", call. = FALSE)
-    }
-    k <- as.integer(k)
-    if (k > n) {
+    if (!is.numeric(k) || length(k) < 1L || anyNA(k) || !all(is.finite(k))) {
         stop(
-            "k = ", k, " exceeds the ", n, " distinct time point(s) in the ",
-            "data. Lower k, or leave it NULL to have it chosen.",
+            "k must be NULL, a single number, or a vector of candidates.",
+            call. = FALSE
+        )
+    }
+    k <- sort(unique(as.integer(k)))
+    if (any(k < 3L)) {
+        stop("Every k must be at least 3.", call. = FALSE)
+    }
+    too_big <- k[k > n]
+    if (length(too_big) > 0) {
+        stop(
+            "k = ", mc_fmt_some(too_big), " exceeds the ", n,
+            " distinct time point(s) in the data. Lower k, or leave it ",
+            "NULL to take the largest the design supports (", k_max, ").",
             call. = FALSE
         )
     }
     k
+}
+
+
+#' Leave-one-out mean squared error, without refitting
+#'
+#' @description
+#' A gam is a linear smoother, so leaving one observation out and
+#' predicting it has a closed form and the n refits it looks like it needs
+#' are not needed: the deleted residual is the ordinary residual divided
+#' by one minus that point's leverage. This is the quantity GCV was built
+#' to approximate, so asking for it directly is the same question asked
+#' exactly rather than cheaply.
+#'
+#' Two things it does not do. The smoothing parameters are held at the
+#' values REML chose on the full data rather than reselected for each
+#' deleted point, which is the usual approximation and the one GCV makes
+#' too. And it leaves out one observation, not one subject, so for
+#' repeated measures it is optimistic: the subject's remaining samples
+#' still carry their random intercept, and a point near them is easier to
+#' predict than a new subject would be. Where that matters the comparison
+#' to make is between subjects, not between observations.
+#'
+#' @param m A fitted `gam`.
+#'
+#' @return The mean squared deleted residual, or `Inf` when no point has
+#'   usable leverage.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_loo_mse <- function(m) {
+    h <- stats::influence(m)
+    r <- stats::residuals(m, type = "response")
+    if (length(h) != length(r)) {
+        return(Inf)
+    }
+    # Leverage of exactly one leaves the deleted residual undefined: the
+    # fit passes through that point whatever the rest of the data says.
+    ok <- is.finite(h) & is.finite(r) & h < 1
+    if (!any(ok)) {
+        return(Inf)
+    }
+    mean((r[ok] / (1 - h[ok]))^2)
+}
+
+
+#' Choose one basis size from several, for one taxon
+#'
+#' @description
+#' Each candidate is fitted and scored, and the fit that wins is handed
+#' back with it so that the winner is never refitted. Three criteria are
+#' offered because they answer different questions. AIC asks which basis
+#' buys its own complexity. Leave-one-out asks which basis predicts a
+#' point it did not see. The variance rule asks the smaller question of
+#' how little basis will do: it takes the deviance the largest candidate
+#' explains as what is there to be had, and returns the smallest candidate
+#' reaching `k_var` of it. The rule is relative for a reason. An absolute
+#' threshold on deviance explained is unreachable for most taxa in a
+#' microbiome table, so it would silently return the largest candidate
+#' every time and look like a choice while being none.
+#'
+#' @param cand Integer vector of candidate basis sizes, already capped to
+#'   what this taxon's time points support.
+#' @param fit_k A function of one basis size returning a fitted `gam`.
+#' @param k_select `"aic"`, `"loo"` or `"variance"`.
+#' @param k_var The fraction for the variance rule.
+#'
+#' @return A list of `k` (the chosen size) and `fit` (its model).
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_choose_k <- function(cand, fit_k, k_select = "aic", k_var = 0.99) {
+    if (length(cand) == 1L) {
+        return(list(k = cand, fit = fit_k(cand)))
+    }
+    fits <- lapply(cand, fit_k)
+
+    if (identical(k_select, "aic")) {
+        sc <- vapply(fits, stats::AIC, numeric(1))
+        i <- which.min(sc)
+    } else if (identical(k_select, "loo")) {
+        sc <- vapply(fits, mc_trend_loo_mse, numeric(1))
+        i <- which.min(sc)
+    } else {
+        dev <- vapply(
+            fits, function(m) summary(m)$dev.expl %||% NA_real_, numeric(1)
+        )
+        best <- max(dev, na.rm = TRUE)
+        # Ties and near-ties go to the smaller basis: the point of the rule
+        # is the smallest basis that loses nothing worth keeping.
+        ok <- which(!is.na(dev) & dev >= k_var * best)
+        i <- if (length(ok) > 0) ok[1] else which.max(dev)
+    }
+    list(k = cand[i], fit = fits[[i]])
+}
+
+
+#' Check the variance fraction
+#'
+#' @param k_var The caller's `k_var`.
+#'
+#' @return `TRUE`, invisibly. Called for the error.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_check_k_var <- function(k_var) {
+    if (length(k_var) != 1L || !is.numeric(k_var) || is.na(k_var) ||
+        k_var <= 0 || k_var > 1) {
+        stop(
+            "k_var must be a single number greater than 0 and at most 1.",
+            call. = FALSE
+        )
+    }
+    invisible(TRUE)
+}
+
+
+#' The fitted formula, as text for the record
+#'
+#' @description
+#' One basis size prints as itself. Several cannot: each taxon chose its
+#' own, so any single number here would be wrong for most rows, and the
+#' sizes that were actually used are in the `k` column of the results.
+#'
+#' @param k Integer vector of one or more basis sizes.
+#' @param subject_effect,covariates,group As in [mc_trend_terms()].
+#'
+#' @return A single string.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_formula_text <- function(k, subject_effect, covariates, group) {
+    tt <- mc_trend_terms(k[1], subject_effect, covariates, group, TRUE)
+    txt <- paste("value ~", paste(tt, collapse = " + "))
+    if (length(k) == 1L) {
+        return(txt)
+    }
+    gsub("k = [0-9]+", "k = <chosen per taxon>", txt)
 }
 
 
@@ -434,6 +586,7 @@ mc_trend_reference <- function(levs, reference = NULL) {
 mc_trend_blank <- function(taxon, n_obs = 0L, n_subjects = 0L, note = NA_character_) {
     data.frame(
         taxon = taxon, edf = NA_real_, F = NA_real_, p_value = NA_real_,
+        k = NA_integer_,
         n_obs = as.integer(n_obs), n_subjects = as.integer(n_subjects),
         converged = FALSE, note = note, stringsAsFactors = FALSE
     )
@@ -444,18 +597,22 @@ mc_trend_blank <- function(taxon, n_obs = 0L, n_subjects = 0L, note = NA_charact
 #'
 #' @param d The taxon's data: `value`, `time`, `subject`, covariates, and
 #'   `mc_grp` when there is a group.
-#' @param k Basis size.
+#' @param k Integer vector. One basis size, or several to choose from.
 #' @param subject_effect The repeated-measures term.
 #' @param covariates Character vector, or `NULL`.
 #' @param group One of `"none"`, `"ordered"`, `"global"`.
 #' @param taxon The taxon's name, for the returned row.
+#' @param k_select `"aic"` or `"variance"`, used only when `k` has more
+#'   than one candidate.
+#' @param k_var The fraction for the variance rule.
 #'
-#' @return A one-row data.frame of `taxon`, `edf`, `F`, `p_value`, `n_obs`,
-#'   `n_subjects`, `converged`, `note`.
+#' @return A one-row data.frame of `taxon`, `edf`, `F`, `p_value`, `k`,
+#'   `n_obs`, `n_subjects`, `converged`, `note`.
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon) {
+mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon,
+                             k_select = "aic", k_var = 0.99) {
     d <- d[!is.na(d$value), , drop = FALSE]
     n_obs <- nrow(d)
     n_sub <- length(unique(d$subject))
@@ -464,7 +621,7 @@ mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon) {
     # cannot support the smooth, and a group that lost all of its samples
     # leaves a factor level with no data.
     n_t <- length(unique(d$time))
-    if (n_obs < k + 2L || n_t < 3L) {
+    if (n_obs < min(k) + 2L || n_t < 3L) {
         return(mc_trend_blank(taxon, n_obs, n_sub, "too few observations"))
     }
     if (!identical(group, "none")) {
@@ -478,16 +635,33 @@ mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon) {
     }
 
     d$subject <- factor(d$subject)
-    kk <- min(k, n_t - 1L)
+    # A taxon can be sparser than the table as a whole, so the candidates
+    # are capped by what this taxon's own time points support. The cap can
+    # collapse several candidates onto one, which is the right answer: a
+    # choice between sizes the data cannot tell apart is not a choice.
+    cand <- sort(unique(pmin(k, n_t - 1L)))
+    cand <- cand[cand >= 3L]
+    if (length(cand) == 0L) {
+        return(mc_trend_blank(taxon, n_obs, n_sub, "too few time points"))
+    }
 
     out <- tryCatch(
         {
-            f1 <- mc_trend_formula(
-                mc_trend_terms(kk, subject_effect, covariates, group, TRUE)
-            )
-            m1 <- mc_trend_gam(f1, d)
+            fit_k <- function(kk) {
+                mc_trend_gam(
+                    mc_trend_formula(
+                        mc_trend_terms(
+                            kk, subject_effect, covariates, group, TRUE
+                        )
+                    ),
+                    d
+                )
+            }
+            ch <- mc_trend_choose_k(cand, fit_k, k_select, k_var)
+            m1 <- ch$fit
+            kk <- ch$k
 
-            if (identical(group, "none")) {
+            r <- if (identical(group, "none")) {
                 mc_trend_read_smooth(m1, "s(time)")
             } else if (nlevels(d$mc_grp) == 2L) {
                 # Two groups leave exactly one difference smooth, so its own
@@ -505,17 +679,24 @@ mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon) {
                 m0 <- mc_trend_gam(f0, d)
                 mc_trend_read_anova(m0, m1)
             }
+            # The null model is built at the chosen k so that the pair being
+            # compared differs by the group smooth and by nothing else.
+            r$k <- kk
+            r
         },
         error = function(e) {
             list(
                 edf = NA_real_, F = NA_real_, p = NA_real_, ok = FALSE,
-                note = sub("[\r\n]+", " ", conditionMessage(e))
+                k = NA_integer_,
+                note = sub("[
+]+", " ", conditionMessage(e))
             )
         }
     )
 
     data.frame(
         taxon = taxon, edf = out$edf, F = out$F, p_value = out$p,
+        k = as.integer(out$k %||% NA_integer_),
         n_obs = as.integer(n_obs), n_subjects = as.integer(n_sub),
         converged = isTRUE(out$ok), note = out$note %||% NA_character_,
         stringsAsFactors = FALSE

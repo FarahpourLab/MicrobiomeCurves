@@ -372,7 +372,7 @@ test_that("results carry the promised columns in the promised order", {
     expect_identical(
         names(tr$results),
         c(
-            "taxon", "edf", "F", "p_value", "q_value",
+            "taxon", "edf", "F", "p_value", "q_value", "k",
             "n_obs", "n_subjects", "converged", "note"
         )
     )
@@ -383,7 +383,7 @@ test_that("results carry the promised columns in the promised order", {
     expect_identical(
         names(cm$results),
         c(
-            "taxon", "edf", "F", "p_value", "q_value",
+            "taxon", "edf", "F", "p_value", "q_value", "k",
             "n_obs", "n_subjects", "converged", "note",
             "n_groups", "reference"
         )
@@ -591,4 +591,158 @@ test_that("mc_trend_plot refuses what it cannot draw", {
     expect_error(mc_trend_plot(tr), "nothing to draw")
     expect_error(mc_trend_plot(tr, 1), "character vector")
     expect_error(mc_trend_plot(tr$results, "Flat"), "mc_trends")
+})
+
+
+# k: one size, or a set of candidates chosen from per taxon.
+
+test_that("k = NULL takes the largest basis the design supports", {
+    meta <- mc_td(n_t = 6)
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    expect_identical(tr$settings$k, 5L)
+    expect_identical(unique(tr$results$k), 5L)
+    expect_match(tr$settings$formula, "k = 5", fixed = TRUE)
+})
+
+test_that("a single k is used as given and reported per taxon", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        k = 4, verbose = FALSE
+    )
+    expect_identical(unique(tr$results$k), 4L)
+    expect_match(tr$settings$formula, "k = 4", fixed = TRUE)
+})
+
+test_that("several k are candidates, and each taxon keeps one of them", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Straight = function(d) 0.8 * d$time,
+        Wavy = function(d) 2 * sin(d$time)
+    ))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        k = c(3, 4, 5), verbose = FALSE
+    )
+    expect_true(all(tr$results$k %in% c(3L, 4L, 5L)))
+    expect_identical(tr$settings$k, c(3L, 4L, 5L))
+    # No single k was fitted, so the recorded formula must not claim one.
+    expect_match(tr$settings$formula, "chosen per taxon", fixed = TRUE)
+})
+
+test_that("the variance rule prefers the smallest basis that loses nothing", {
+    meta <- mc_td()
+    # A straight line needs no wiggle room, so the smallest candidate
+    # reaches the largest one's deviance and wins.
+    tab <- mc_tt(meta, list(Straight = function(d) 0.8 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        k = c(3, 4, 5), k_select = "variance", verbose = FALSE
+    )
+    expect_identical(tr$results$k, 3L)
+})
+
+test_that("a candidate k is capped by the time points a taxon has", {
+    meta <- mc_td(n_t = 4)
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        k = c(3, 4), verbose = FALSE
+    )
+    expect_true(all(tr$results$k <= 3L))
+})
+
+test_that("the figure is refitted at the k that taxon was tested with", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 2 * sin(d$time)))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        k = c(3, 5), verbose = FALSE
+    )
+    rf <- mc_trend_refit(tr, "X")
+    expect_identical(
+        as.integer(rf$fit$smooth[[1]]$bs.dim), as.integer(tr$results$k[1])
+    )
+})
+
+test_that("an impossible k is refused rather than silently lowered", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+    one <- function(...) {
+        mc_trends(tab, meta, "sample", "subject", "time", ..., verbose = FALSE)
+    }
+
+    expect_error(one(k = 2), "at least 3")
+    expect_error(one(k = c(3, 2)), "at least 3")
+    expect_error(one(k = 99), "exceeds")
+    expect_error(one(k = c(3, 99)), "exceeds")
+    expect_error(one(k = "4"), "NULL, a single number, or a vector")
+    expect_error(one(k = c(3, 5), k_var = 0), "greater than 0")
+    expect_error(one(k = c(3, 5), k_var = 1.5), "greater than 0")
+})
+
+test_that("a grouped figure is one panel, not two", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    cm <- mc_compare(tab, meta, "sample", "subject", "time",
+        group_col = "arm", verbose = FALSE
+    )
+    p <- mc_trend_plot(cm, taxa = "X", verbose = FALSE)
+    expect_s3_class(p, "ggplot")
+    expect_false(inherits(p, "patchwork"))
+})
+
+
+test_that("leave-one-out picks a candidate and reports it", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(
+        Straight = function(d) 0.8 * d$time,
+        Wavy = function(d) 2 * sin(d$time)
+    ))
+
+    tr <- mc_trends(tab, meta, "sample", "subject", "time",
+        k = c(3, 4, 5), k_select = "loo", verbose = FALSE
+    )
+    expect_true(all(tr$results$k %in% c(3L, 4L, 5L)))
+    expect_true(all(tr$results$converged))
+})
+
+test_that("the leave-one-out shortcut is the refitting answer", {
+    # The closed form is only worth having if it agrees with the n refits
+    # it replaces, so it is checked against them rather than against
+    # itself. Smoothing parameters are held where REML put them, which is
+    # the approximation the shortcut makes and the one being tested.
+    skip_if_not_installed("mgcv")
+    meta <- mc_td(n_sub = 8, n_t = 5)
+    tab <- mc_tt(meta, list(X = function(d) 2 * sin(d$time)))
+    d <- data.frame(
+        value = as.numeric(unlist(tab[1, -1])),
+        time = meta$time, subject = factor(meta$subject)
+    )
+
+    f <- value ~ s(time, k = 4) + s(subject, bs = "re")
+    m <- mgcv::gam(f, data = d, method = "REML")
+    shortcut <- mc_trend_loo_mse(m)
+
+    brute <- mean(vapply(seq_len(nrow(d)), function(i) {
+        mi <- mgcv::gam(f, data = d[-i, ], method = "REML", sp = m$sp)
+        (d$value[i] - as.numeric(mgcv::predict.gam(mi, d[i, ])))^2
+    }, numeric(1)))
+
+    expect_equal(shortcut, brute, tolerance = 0.01)
+})
+
+test_that("an unknown k_select is refused", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+    expect_error(
+        mc_trends(tab, meta, "sample", "subject", "time",
+            k = c(3, 4), k_select = "bogus", verbose = FALSE
+        ),
+        "should be one of"
+    )
 })
