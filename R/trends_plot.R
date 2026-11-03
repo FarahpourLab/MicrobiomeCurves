@@ -46,10 +46,17 @@ mc_trend_refit <- function(obj, taxon) {
     kk <- obj$results$k[match(taxon, obj$results$taxon)]
     if (length(kk) != 1L || is.na(kk)) kk <- max(s$k)
     kk <- min(kk, length(unique(d$time)) - 1L)
+    # The family too has to be the one behind the p-value, and with it the
+    # offset: a count fit redrawn without its library sizes is a different
+    # model from the one that was tested.
+    fam_name <- s$family %||% "gaussian"
+    use_off <- mc_trend_has_offset(fam_name)
     f <- mc_trend_formula(
-        mc_trend_terms(kk, s$subject_effect, s$covariates, s$group, TRUE)
+        mc_trend_terms(
+            kk, s$subject_effect, s$covariates, s$group, TRUE, use_off
+        )
     )
-    list(fit = mc_trend_gam(f, d), data = d)
+    list(fit = mc_trend_gam(f, d, mc_trend_family_obj(fam_name)), data = d)
 }
 
 
@@ -95,6 +102,13 @@ mc_trend_grid <- function(d, group, covariates = NULL, n_points = 200) {
     }
     # Any level will do: the subject terms are excluded from the prediction.
     nd$subject <- d$subject[1]
+    # An offset cannot be excluded the way a smooth can, so the curve is
+    # drawn at one stated library size rather than at none. The median is
+    # the depth a typical sample was sequenced to, which makes the drawn
+    # curve an expected count for such a sample.
+    if (!is.null(d$mc_off)) {
+        nd$mc_off <- stats::median(d$mc_off, na.rm = TRUE)
+    }
     # A covariate has no shape of its own, so it is held at one value and
     # the drawn curve is the trajectory at that value.
     for (cv in covariates) {
@@ -132,9 +146,18 @@ mc_trend_panel <- function(obj, taxon) {
         se.fit = TRUE, exclude = mc_trend_subject_smooths(m),
         newdata.guaranteed = FALSE
     )
-    nd$fit <- as.numeric(pr$fit)
-    nd$lo <- nd$fit - 1.96 * as.numeric(pr$se.fit)
-    nd$hi <- nd$fit + 1.96 * as.numeric(pr$se.fit)
+    # The band is formed on the link scale, where the standard error is the
+    # one mgcv reports and the interval is symmetric, and only then mapped
+    # back. Under a log link that makes it asymmetric on the drawn scale,
+    # which is correct: an interval symmetric around a count would run
+    # negative. For the identity link of a gaussian fit the map is identity
+    # and this is the arithmetic it has always been.
+    li <- m$family$linkinv
+    eta <- as.numeric(pr$fit)
+    se <- as.numeric(pr$se.fit)
+    nd$fit <- li(eta)
+    nd$lo <- li(eta - 1.96 * se)
+    nd$hi <- li(eta + 1.96 * se)
 
     if (identical(s$group, "none")) {
         # The colours are mapped to constants rather than set directly, so
@@ -181,7 +204,7 @@ mc_trend_panel <- function(obj, taxon) {
             ) +
             ggplot2::labs(
                 title = mc_plot_title(taxon),
-                x = "Time point", y = "CLR abundance"
+                x = "Time point", y = mc_trend_y_label(s)
             ) +
             mc_trend_theme()
         return(p)
@@ -205,7 +228,7 @@ mc_trend_panel <- function(obj, taxon) {
         ) +
         ggplot2::labs(
             title = mc_plot_title(taxon),
-            x = "Time point", y = "CLR abundance",
+            x = "Time point", y = mc_trend_y_label(s),
             colour = s$group_col, fill = s$group_col
         ) +
         mc_trend_theme()

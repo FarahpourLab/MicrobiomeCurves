@@ -14,6 +14,8 @@ mc_trends(
   normalization = c("NONE", "TSS", "CLR"),
   transform = c("NONE", "LOG", "LOGIT", "AST"),
   pseudocount = "auto",
+  family = c("gaussian", "nb", "tw"),
+  depth = NULL,
   covariates = NULL,
   k = NULL,
   k_select = c("aic", "loo", "variance"),
@@ -30,7 +32,9 @@ mc_trends(
 \arguments{
 \item{abundance}{Abundance table: a data.frame with one column of taxon
 names and one column per sample, or a matrix of taxa by samples with
-row names. Values are expected on the centred log ratio scale. \code{NA} is
+row names. Values are expected on the centred log ratio scale, which is
+what the default \code{family = "gaussian"} is for; a table of counts
+belongs with \code{family = "nb"} instead. \code{NA} is
 allowed and those rows are dropped from the fit, so passing a table
 with gaps tests observed cells only while passing \code{mc_run()}'s
 \code{completed} table includes the imputed ones.}
@@ -71,6 +75,30 @@ exactly what it means in \code{\link[=mc_run]{mc_run()}}: \code{"auto"} replaces
 added to every entry instead. \code{transform = "LOG"} does not read it, so
 that \code{"TSS"} with \code{"LOG"} reproduces MaAsLin 2's own rule of half the
 smallest positive value in the taxon.}
+
+\item{family}{The error distribution and link. \code{"gaussian"} is the
+default and is identity-link least squares. \code{"nb"} is a negative
+binomial with a log link, for a table of raw counts, and reads
+\code{depth}. \code{"tw"} is a Tweedie with a log link, for non-negative
+amounts with exact zeros. Both non-Gaussian families estimate their
+own extra parameter by REML, and both model the log of the mean
+abundance rather than the mean of a transformed abundance. Only the
+pairings the values can support are accepted.}
+
+\item{depth}{Library size per sample, read only when \code{family = "nb"},
+where it enters the model as \code{offset(log(depth))}. \code{NULL}, the
+default, takes the column sums of \code{abundance} as supplied, over every
+taxon and before \code{taxa} selects from it, since the library size is a
+property of the sample. That default is the library size only when
+\code{abundance} holds the whole community: hand in a table already cut
+down to a few taxa and its column sums are the total of those taxa,
+which is part of the response rather than an offset for it. Pass the
+sizes explicitly whenever the table is a subset. The resolved median
+is reported when \code{verbose}, which is the quickest way to see that the
+default was not what you meant. A single string names a \code{metadata}
+column to read instead. A numeric vector must be named by sample: an
+unnamed one would be matched by position, and an offset paired with
+the wrong samples biases every taxon without raising anything.}
 
 \item{covariates}{Character vector of \code{metadata} columns to adjust for.
 They enter as parametric terms, shifting the curve without a shape of
@@ -145,6 +173,41 @@ The model is
 
 fitted by \code{mgcv::gam()} with \code{method = "REML"}. The reported test is the
 p-value of \code{s(time)} from \code{summary.gam()}, adjusted across taxa.
+
+\code{family} says what the values are, and so what is being modelled.
+\code{"gaussian"}, the default, puts an identity link on them and is the
+right model for a centred log ratio table or any other transformed
+scale, where the values run over the whole real line. \code{"nb"} is a
+negative binomial with a log link, for raw counts, and takes the library
+size through \code{depth} as \code{offset(log(depth))}. \code{"tw"} is a Tweedie with a
+log link, for non-negative amounts such as relative abundances, which it
+accepts with their exact zeros rather than needing a pseudocount or a
+squeeze into the open unit interval.
+
+These are not three spellings of one model. A Gaussian fit of log or CLR
+values estimates the mean of a transformed abundance; a log-link family
+estimates the log of the mean abundance. The two differ by Jensen's
+inequality, and the gap is a real difference in the quantity, not
+numerical slack. The practical consequence is zeros: on the CLR scale a
+zero becomes a large negative number whose size came from
+\code{pseudocount}, so for a rare taxon the trend can be substantially a
+property of that choice, while a count family takes the zero as an
+observation.
+
+The input scale decides which family is admissible. \code{"gaussian"} accepts
+any. \code{"nb"} needs the counts themselves, so \code{normalization} and
+\code{transform} must both be \code{"NONE"} and the values must be whole numbers.
+\code{"tw"} needs \code{transform = "NONE"}, \code{normalization} either \code{"NONE"} or
+\code{"TSS"}, and non-negative values. A pairing outside those stops the call
+rather than fitting something that cannot be read.
+
+Two consequences of leaving \code{"gaussian"} are worth knowing. The \code{F}
+column holds whatever statistic \code{summary.gam()} gives the term, which is
+a chi-squared and not an F when the family fixes the scale; the p-value
+comes from the same table either way, so the test is unaffected and only
+the column's name is loose. And \code{k_select = "loo"} becomes approximate,
+since the closed form it uses is an identity for a linear model and a
+working-scale approximation for a generalised one.
 
 Time must be numeric. A smooth needs a continuous axis, so a column of
 labels such as \code{"week_4"} is refused rather than coerced to 1, 2, 3,

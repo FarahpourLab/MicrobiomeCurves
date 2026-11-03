@@ -16,6 +16,8 @@ mc_compare(
   normalization = c("NONE", "TSS", "CLR"),
   transform = c("NONE", "LOG", "LOGIT", "AST"),
   pseudocount = "auto",
+  family = c("gaussian", "nb", "tw"),
+  depth = NULL,
   covariates = NULL,
   k = NULL,
   k_select = c("aic", "loo", "variance"),
@@ -32,7 +34,9 @@ mc_compare(
 \arguments{
 \item{abundance}{Abundance table: a data.frame with one column of taxon
 names and one column per sample, or a matrix of taxa by samples with
-row names. Values are expected on the centred log ratio scale. \code{NA} is
+row names. Values are expected on the centred log ratio scale, which is
+what the default \code{family = "gaussian"} is for; a table of counts
+belongs with \code{family = "nb"} instead. \code{NA} is
 allowed and those rows are dropped from the fit, so passing a table
 with gaps tests observed cells only while passing \code{mc_run()}'s
 \code{completed} table includes the imputed ones.}
@@ -81,6 +85,30 @@ exactly what it means in \code{\link[=mc_run]{mc_run()}}: \code{"auto"} replaces
 added to every entry instead. \code{transform = "LOG"} does not read it, so
 that \code{"TSS"} with \code{"LOG"} reproduces MaAsLin 2's own rule of half the
 smallest positive value in the taxon.}
+
+\item{family}{The error distribution and link. \code{"gaussian"} is the
+default and is identity-link least squares. \code{"nb"} is a negative
+binomial with a log link, for a table of raw counts, and reads
+\code{depth}. \code{"tw"} is a Tweedie with a log link, for non-negative
+amounts with exact zeros. Both non-Gaussian families estimate their
+own extra parameter by REML, and both model the log of the mean
+abundance rather than the mean of a transformed abundance. Only the
+pairings the values can support are accepted.}
+
+\item{depth}{Library size per sample, read only when \code{family = "nb"},
+where it enters the model as \code{offset(log(depth))}. \code{NULL}, the
+default, takes the column sums of \code{abundance} as supplied, over every
+taxon and before \code{taxa} selects from it, since the library size is a
+property of the sample. That default is the library size only when
+\code{abundance} holds the whole community: hand in a table already cut
+down to a few taxa and its column sums are the total of those taxa,
+which is part of the response rather than an offset for it. Pass the
+sizes explicitly whenever the table is a subset. The resolved median
+is reported when \code{verbose}, which is the quickest way to see that the
+default was not what you meant. A single string names a \code{metadata}
+column to read instead. A numeric vector must be named by sample: an
+unnamed one would be matched by position, and an offset paired with
+the wrong samples biases every taxon without raising anything.}
 
 \item{covariates}{Character vector of \code{metadata} columns to adjust for.
 They enter as parametric terms, shifting the curve without a shape of

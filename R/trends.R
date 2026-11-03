@@ -31,6 +31,41 @@
 #' fitted by `mgcv::gam()` with `method = "REML"`. The reported test is the
 #' p-value of `s(time)` from `summary.gam()`, adjusted across taxa.
 #'
+#' `family` says what the values are, and so what is being modelled.
+#' `"gaussian"`, the default, puts an identity link on them and is the
+#' right model for a centred log ratio table or any other transformed
+#' scale, where the values run over the whole real line. `"nb"` is a
+#' negative binomial with a log link, for raw counts, and takes the library
+#' size through `depth` as `offset(log(depth))`. `"tw"` is a Tweedie with a
+#' log link, for non-negative amounts such as relative abundances, which it
+#' accepts with their exact zeros rather than needing a pseudocount or a
+#' squeeze into the open unit interval.
+#'
+#' These are not three spellings of one model. A Gaussian fit of log or CLR
+#' values estimates the mean of a transformed abundance; a log-link family
+#' estimates the log of the mean abundance. The two differ by Jensen's
+#' inequality, and the gap is a real difference in the quantity, not
+#' numerical slack. The practical consequence is zeros: on the CLR scale a
+#' zero becomes a large negative number whose size came from
+#' `pseudocount`, so for a rare taxon the trend can be substantially a
+#' property of that choice, while a count family takes the zero as an
+#' observation.
+#'
+#' The input scale decides which family is admissible. `"gaussian"` accepts
+#' any. `"nb"` needs the counts themselves, so `normalization` and
+#' `transform` must both be `"NONE"` and the values must be whole numbers.
+#' `"tw"` needs `transform = "NONE"`, `normalization` either `"NONE"` or
+#' `"TSS"`, and non-negative values. A pairing outside those stops the call
+#' rather than fitting something that cannot be read.
+#'
+#' Two consequences of leaving `"gaussian"` are worth knowing. The `F`
+#' column holds whatever statistic `summary.gam()` gives the term, which is
+#' a chi-squared and not an F when the family fixes the scale; the p-value
+#' comes from the same table either way, so the test is unaffected and only
+#' the column's name is loose. And `k_select = "loo"` becomes approximate,
+#' since the closed form it uses is an identity for a linear model and a
+#' working-scale approximation for a generalised one.
+#'
 #' Time must be numeric. A smooth needs a continuous axis, so a column of
 #' labels such as `"week_4"` is refused rather than coerced to 1, 2, 3,
 #' which would assert an equal spacing the study may not have.
@@ -65,10 +100,34 @@
 #'
 #' @param abundance Abundance table: a data.frame with one column of taxon
 #'   names and one column per sample, or a matrix of taxa by samples with
-#'   row names. Values are expected on the centred log ratio scale. `NA` is
+#'   row names. Values are expected on the centred log ratio scale, which is
+#'   what the default `family = "gaussian"` is for; a table of counts
+#'   belongs with `family = "nb"` instead. `NA` is
 #'   allowed and those rows are dropped from the fit, so passing a table
 #'   with gaps tests observed cells only while passing `mc_run()`'s
 #'   `completed` table includes the imputed ones.
+#' @param family The error distribution and link. `"gaussian"` is the
+#'   default and is identity-link least squares. `"nb"` is a negative
+#'   binomial with a log link, for a table of raw counts, and reads
+#'   `depth`. `"tw"` is a Tweedie with a log link, for non-negative
+#'   amounts with exact zeros. Both non-Gaussian families estimate their
+#'   own extra parameter by REML, and both model the log of the mean
+#'   abundance rather than the mean of a transformed abundance. Only the
+#'   pairings the values can support are accepted.
+#' @param depth Library size per sample, read only when `family = "nb"`,
+#'   where it enters the model as `offset(log(depth))`. `NULL`, the
+#'   default, takes the column sums of `abundance` as supplied, over every
+#'   taxon and before `taxa` selects from it, since the library size is a
+#'   property of the sample. That default is the library size only when
+#'   `abundance` holds the whole community: hand in a table already cut
+#'   down to a few taxa and its column sums are the total of those taxa,
+#'   which is part of the response rather than an offset for it. Pass the
+#'   sizes explicitly whenever the table is a subset. The resolved median
+#'   is reported when `verbose`, which is the quickest way to see that the
+#'   default was not what you meant. A single string names a `metadata`
+#'   column to read instead. A numeric vector must be named by sample: an
+#'   unnamed one would be matched by position, and an offset paired with
+#'   the wrong samples biases every taxon without raising anything.
 #' @param metadata A data.frame with one row per sample.
 #' @param sample_col Column of `metadata` holding the sample names used as
 #'   `abundance`'s column names.
@@ -180,6 +239,8 @@ mc_trends <- function(abundance, metadata,
                       normalization = c("NONE", "TSS", "CLR"),
                       transform = c("NONE", "LOG", "LOGIT", "AST"),
                       pseudocount = "auto",
+                      family = c("gaussian", "nb", "tw"),
+                      depth = NULL,
                       covariates = NULL,
                       k = NULL,
                       k_select = c("aic", "loo", "variance"),
@@ -194,6 +255,7 @@ mc_trends <- function(abundance, metadata,
     subject_effect <- match.arg(subject_effect)
     normalization <- match.arg(normalization)
     transform <- match.arg(transform)
+    family <- match.arg(family)
     k_select <- match.arg(k_select)
     mc_trend_check_k_var(k_var)
 
@@ -202,7 +264,7 @@ mc_trends <- function(abundance, metadata,
         sample_col = sample_col, subject_col = subject_col,
         time_col = time_col, taxon_col = taxon_col,
         normalization = normalization, transform = transform,
-        pseudocount = pseudocount,
+        pseudocount = pseudocount, family = family, depth = depth,
         group_col = NULL, reference = NULL,
         covariates = covariates, k = k, k_select = k_select,
         k_var = k_var, subject_effect = subject_effect,
@@ -324,6 +386,8 @@ mc_compare <- function(abundance, metadata,
                        normalization = c("NONE", "TSS", "CLR"),
                        transform = c("NONE", "LOG", "LOGIT", "AST"),
                        pseudocount = "auto",
+                       family = c("gaussian", "nb", "tw"),
+                       depth = NULL,
                        covariates = NULL,
                        k = NULL,
                        k_select = c("aic", "loo", "variance"),
@@ -338,6 +402,7 @@ mc_compare <- function(abundance, metadata,
     subject_effect <- match.arg(subject_effect)
     normalization <- match.arg(normalization)
     transform <- match.arg(transform)
+    family <- match.arg(family)
     k_select <- match.arg(k_select)
     mc_trend_check_k_var(k_var)
 
@@ -357,7 +422,7 @@ mc_compare <- function(abundance, metadata,
         sample_col = sample_col, subject_col = subject_col,
         time_col = time_col, taxon_col = taxon_col,
         normalization = normalization, transform = transform,
-        pseudocount = pseudocount,
+        pseudocount = pseudocount, family = family, depth = depth,
         group_col = group_col, reference = reference,
         covariates = covariates, k = k, k_select = k_select,
         k_var = k_var, subject_effect = subject_effect,
@@ -385,7 +450,8 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                          pseudocount, group_col, reference,
                          covariates, k, k_select, k_var, subject_effect,
                          taxa, p_adjust,
-                         alpha, out_dir, n_cores, verbose) {
+                         alpha, out_dir, n_cores, verbose,
+                         family = "gaussian", depth = NULL) {
     say <- function(...) if (isTRUE(verbose)) message(...)
 
     design <- mc_trend_design(
@@ -398,6 +464,19 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
     al <- mc_trend_align(design, tm$mat, verbose)
     design <- al$design
     mat <- al$mat
+
+    # On the values as they will be fitted, so that a scaling applied above
+    # is what the family is judged against.
+    mc_trend_check_family(family, normalization, transform, mat)
+
+    dp <- NULL
+    if (mc_trend_has_offset(family)) {
+        dp <- mc_trend_depth(depth, design, tm$totals, metadata, sample_col)
+        # Carried on the design rather than added per taxon, so that a
+        # follow-up refitting one taxon from the stored object offsets by
+        # the same sizes the reported fit did.
+        design$mc_off <- dp$value
+    }
 
     k <- mc_trend_k(design$time, k)
 
@@ -438,6 +517,29 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
         )
     })
     say("  subject effect : ", subject_effect)
+    if (!identical(family, "gaussian")) {
+        say("  family         : ", switch(family,
+            nb = "nb(), negative binomial, log link",
+            tw = "tw(), Tweedie, log link"
+        ))
+        if (!is.null(dp)) {
+            say("  library size   : ", dp$source)
+            say(
+                "                   offset(log(depth)), median ",
+                stats::median(dp$value)
+            )
+            # A median far below the depth the run was sequenced to means
+            # the table is a subset and its column sums are not the
+            # library size. Only the caller can know that, so the number
+            # is put where they will see it.
+            if (is.null(depth)) {
+                say(
+                    "                   check this is the library size ",
+                    "and not the total of a subset"
+                )
+            }
+        }
+    }
     # Reported only when something was applied. Silence is the default case
     # and saying so on every run would bury the lines that vary.
     if (!identical(normalization, "NONE") || !identical(transform, "NONE")) {
@@ -470,7 +572,7 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
         d$value <- as.numeric(mat[i, ])
         mc_trend_fit_one(
             d, k, subject_effect, covariates, grp$group, rownames(mat)[i],
-            k_select, k_var
+            k_select, k_var, family
         )
     }
     res <- do.call(rbind, mc_trend_apply(n_tax, one, n_cores, verbose))
@@ -504,6 +606,9 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                 covariates = covariates, group_col = group_col,
                 normalization = normalization, transform = transform,
                 pseudocount = pseudocount,
+                family = family,
+                depth = if (is.null(dp)) NULL else dp$value,
+                depth_source = if (is.null(dp)) NULL else dp$source,
                 reference = grp$reference, group = grp$group,
                 levels = grp$levels, alpha = alpha, p_adjust = p_adjust,
                 sample_col = sample_col, subject_col = subject_col,
@@ -517,9 +622,14 @@ mc_trend_run <- function(abundance, metadata, sample_col, subject_col,
                 # any single one of them would misreport every taxon that
                 # chose another. The per-taxon sizes are in results$k.
                 formula = mc_trend_formula_text(
-                    k, subject_effect, covariates, grp$group
+                    k, subject_effect, covariates, grp$group,
+                    mc_trend_has_offset(family)
                 ),
-                method = "REML",
+                method = if (identical(family, "gaussian")) {
+                    "REML"
+                } else {
+                    paste0("REML, family = ", family, "()")
+                },
                 test = if (identical(grp$group, "none")) {
                     "s(time) from summary.gam()"
                 } else if (length(grp$levels) == 2L) {
@@ -712,6 +822,15 @@ mc_trend_print <- function(x, what) {
         cat("  input scale  : ", s$normalization, " + ", s$transform, "\n",
             sep = ""
         )
+    }
+    # Silent for the default, reported otherwise: the family decides what
+    # the fitted numbers mean, so a result that does not say which one was
+    # used cannot be read.
+    if (!identical(s$family %||% "gaussian", "gaussian")) {
+        cat("  family       : ", s$family, "(), log link\n", sep = "")
+        if (!is.null(s$depth_source)) {
+            cat("  library size : ", s$depth_source, "\n", sep = "")
+        }
     }
     if (!is.null(s$group_col)) {
         cat("  group        : ", s$group_col, " (", length(s$levels),

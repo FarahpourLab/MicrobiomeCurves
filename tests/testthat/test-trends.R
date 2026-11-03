@@ -746,3 +746,286 @@ test_that("an unknown k_select is refused", {
         "should be one of"
     )
 })
+
+
+# ---------------------------------------------------------------- families
+#
+# The scale the values are on and the family fitted to them are one
+# decision in two arguments, so what is tested here is that the pairings
+# that cannot be read are refused, that the offset a count family needs is
+# the library size and not something that happens to line up with it, and
+# that leaving family alone leaves the Gaussian fit exactly as it was.
+
+mc_tcnt <- function(n_sub = 14, n_t = 6, drift = 0.15, seed = 11) {
+    meta <- expand.grid(
+        time = seq_len(n_t), subject = paste0("S", seq_len(n_sub)),
+        stringsAsFactors = FALSE
+    )
+    meta <- meta[order(meta$subject, meta$time), ]
+    meta$sample <- paste0(meta$subject, "_T", meta$time)
+    rownames(meta) <- NULL
+    # Sequencing depth climbing over time, so that a count fit which
+    # ignores it sees a trend in a taxon that has none.
+    meta$libsize <- round(20000 * exp(drift * meta$time))
+
+    withr::with_seed(seed, {
+        mu_rise <- exp(-6 + 0.25 * meta$time) * meta$libsize
+        mu_flat <- exp(-6) * meta$libsize
+        cnt <- rbind(
+            Rising = stats::rnbinom(nrow(meta), mu = mu_rise, size = 4),
+            Flat = stats::rnbinom(nrow(meta), mu = mu_flat, size = 4),
+            # Filler, so that the column sums are a community total rather
+            # than the two taxa being tested.
+            do.call(rbind, lapply(1:8, function(j) {
+                stats::rnbinom(nrow(meta),
+                    mu = exp(-4 - 0.3 * j) * meta$libsize, size = 4
+                )
+            }))
+        )
+        rownames(cnt) <- c("Rising", "Flat", paste0("Filler", 1:8))
+        colnames(cnt) <- meta$sample
+        list(
+            meta = meta,
+            tab = data.frame(
+                taxon = rownames(cnt), cnt, check.names = FALSE
+            )
+        )
+    })
+}
+
+
+test_that("the default family is gaussian, and naming it changes nothing", {
+    meta <- mc_td()
+    tab <- mc_tt(meta, list(X = function(d) 0.8 * d$time))
+
+    a <- mc_trends(tab, meta, "sample", "subject", "time", verbose = FALSE)
+    b <- mc_trends(tab, meta, "sample", "subject", "time",
+        family = "gaussian", verbose = FALSE
+    )
+
+    expect_identical(a$results, b$results)
+    expect_identical(a$settings$family, "gaussian")
+    # Nothing about the Gaussian path says "family": the formula carries no
+    # offset and the method line is the one it always was.
+    expect_identical(a$settings$method, "REML")
+    expect_false(grepl("offset", a$settings$formula, fixed = TRUE))
+})
+
+test_that("a count family fits counts and records how", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+
+    nb <- mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+        family = "nb", depth = "libsize",
+        taxa = c("Rising", "Flat"), verbose = FALSE
+    )
+
+    expect_identical(nb$settings$family, "nb")
+    expect_match(nb$settings$formula, "offset(log(mc_off))", fixed = TRUE)
+    expect_match(nb$settings$method, "nb()", fixed = TRUE)
+    expect_true(all(nb$results$converged))
+    # The taxon whose expected proportion climbs is found; the one whose
+    # counts only climb with the depth is not.
+    expect_lt(nb$results$q_value[nb$results$taxon == "Rising"], 0.05)
+    expect_gt(nb$results$q_value[nb$results$taxon == "Flat"], 0.05)
+})
+
+test_that("the offset is what separates a trend from rising depth", {
+    # The substantive test of the offset. Flat has a constant expected
+    # proportion and a depth that climbs, so its counts climb. Told the
+    # library sizes, the fit attributes that to the depth. Told a constant
+    # instead - which is an offset in form and none in effect - it has
+    # nowhere to put it but the smooth of time.
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    const <- stats::setNames(
+        rep(1e4, nrow(cd$meta)), cd$meta$sample
+    )
+
+    with_off <- mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+        family = "nb", depth = "libsize", taxa = "Flat", verbose = FALSE
+    )
+    without <- mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+        family = "nb", depth = const, taxa = "Flat", verbose = FALSE
+    )
+
+    expect_gt(with_off$results$p_value, 0.05)
+    expect_lt(without$results$p_value, 0.05)
+})
+
+test_that("library size is read from the table, a column, or a vector", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    one <- function(...) {
+        mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+            family = "nb", taxa = "Rising", verbose = FALSE, ...
+        )
+    }
+
+    # The default is the column sums of the table as supplied, over every
+    # taxon and before taxa selected one of them.
+    deflt <- one()
+    expect_identical(
+        deflt$settings$depth,
+        as.numeric(colSums(
+            as.matrix(cd$tab[, -1])
+        )[deflt$design$sample])
+    )
+    expect_match(deflt$settings$depth_source, "column sums")
+
+    from_col <- one(depth = "libsize")
+    expect_identical(
+        from_col$settings$depth,
+        as.numeric(cd$meta$libsize[
+            match(from_col$design$sample, cd$meta$sample)
+        ])
+    )
+
+    v <- stats::setNames(cd$meta$libsize, cd$meta$sample)
+    expect_identical(one(depth = v)$results, from_col$results)
+})
+
+test_that("a library size that cannot be trusted is refused", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    one <- function(...) {
+        mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+            family = "nb", taxa = "Rising", verbose = FALSE, ...
+        )
+    }
+
+    # Unnamed is the dangerous one: it would be matched by position and
+    # nothing would fail, so it is refused rather than guessed at.
+    expect_error(one(depth = rep(1e4, nrow(cd$meta))), "named by sample")
+    expect_error(one(depth = c(S1_T1 = 1e4)), "no entry for sample")
+    expect_error(one(depth = "nosuchcolumn"), "no column")
+    expect_error(one(depth = letters), "single string")
+
+    m0 <- cd$meta
+    m0$libsize[3] <- 0
+    expect_error(
+        mc_trends(cd$tab, m0, "sample", "subject", "time",
+            family = "nb", depth = "libsize", taxa = "Rising",
+            verbose = FALSE
+        ),
+        "greater than 0"
+    )
+})
+
+test_that("a family the values cannot support is refused", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    one <- function(...) {
+        mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+            taxa = "Rising", verbose = FALSE, ...
+        )
+    }
+
+    expect_error(one(family = "nb", normalization = "CLR"), "normalization")
+    expect_error(one(family = "nb", normalization = "TSS"), "normalization")
+    expect_error(one(family = "nb", transform = "LOG"), "transform")
+    expect_error(one(family = "tw", normalization = "CLR"), "normalization")
+    expect_error(one(family = "tw", transform = "AST"), "transform")
+    expect_error(one(family = "zinb"), "should be one of")
+
+    # A table already on a centred scale has negatives in it, which no
+    # log-link family can be asked about whatever the arguments say.
+    meta2 <- mc_td()
+    clrish <- mc_tt(meta2, list(X = function(d) -3 + 0.1 * d$time))
+    expect_error(
+        mc_trends(clrish, meta2, "sample", "subject", "time",
+            family = "tw", verbose = FALSE
+        ),
+        "non-negative"
+    )
+
+    frac <- cd$tab
+    frac[1, 2] <- 3.5
+    expect_error(
+        mc_trends(frac, cd$meta, "sample", "subject", "time",
+            family = "nb", taxa = "Rising", verbose = FALSE
+        ),
+        "non-integer"
+    )
+})
+
+test_that("a Tweedie fit takes proportions with their zeros", {
+    # The reason tw is offered for a TSS table: the zeros stay zeros. A
+    # beta family would need them squeezed off the boundary first, which is
+    # the pseudocount problem again under another name.
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    cd$tab[cd$tab$taxon == "Rising", 2:5] <- 0
+
+    tw <- mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+        normalization = "TSS", family = "tw",
+        taxa = c("Rising", "Flat"), verbose = FALSE
+    )
+
+    expect_true(all(tw$results$converged))
+    expect_identical(tw$settings$family, "tw")
+    # No offset: a proportion has already been divided by the depth.
+    expect_false(grepl("offset", tw$settings$formula, fixed = TRUE))
+    expect_null(tw$settings$depth)
+    expect_lt(tw$results$q_value[tw$results$taxon == "Rising"], 0.05)
+})
+
+test_that("mc_compare takes a family too", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    cd$meta$arm <- ifelse(
+        cd$meta$subject %in% paste0("S", 1:7), "control", "treated"
+    )
+
+    cm <- mc_compare(cd$tab, cd$meta, "sample", "subject", "time",
+        group_col = "arm", family = "nb", depth = "libsize",
+        taxa = c("Rising", "Flat"), verbose = FALSE
+    )
+
+    expect_s3_class(cm, "mc_compare")
+    expect_identical(cm$settings$family, "nb")
+    expect_true(all(cm$results$converged))
+})
+
+test_that("the figure is refitted with the family that was tested", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    nb <- mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+        family = "nb", depth = "libsize", taxa = "Rising", verbose = FALSE
+    )
+
+    rf <- mc_trend_refit(nb, "Rising")
+    expect_match(rf$fit$family$family, "Negative Binomial")
+    expect_identical(rf$fit$family$link, "log")
+    # The offset travels on the design, so the refit is offset by the sizes
+    # the reported fit used rather than by none.
+    expect_true("mc_off" %in% names(rf$data))
+    expect_identical(
+        sort(unique(rf$data$mc_off)), sort(unique(cd$meta$libsize))
+    )
+
+    p <- mc_trend_plot(nb, taxa = "Rising", verbose = FALSE)
+    expect_s3_class(p, "ggplot")
+    # Drawn on the response scale, so the band is a count and cannot run
+    # negative the way an interval symmetric about a log mean would.
+    layers <- ggplot2::ggplot_build(p)$data
+    has_band <- vapply(
+        layers, function(l) all(c("ymin", "ymax") %in% names(l)), logical(1)
+    )
+    band <- layers[has_band][[1]]
+    expect_true(all(band$ymin > 0))
+    expect_true(all(band$ymax > band$ymin))
+})
+
+test_that("a non-Gaussian family still chooses k from candidates", {
+    skip_if_not_installed("mgcv")
+    cd <- mc_tcnt()
+    for (sel in c("aic", "loo", "variance")) {
+        nb <- mc_trends(cd$tab, cd$meta, "sample", "subject", "time",
+            family = "nb", depth = "libsize", taxa = "Rising",
+            k = c(3, 4, 5), k_select = sel, verbose = FALSE
+        )
+        expect_true(nb$results$k %in% c(3L, 4L, 5L), info = sel)
+        expect_true(nb$results$converged, info = sel)
+    }
+})

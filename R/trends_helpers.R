@@ -24,7 +24,7 @@
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_reserved <- c("value", "time", "subject", "mc_grp")
+mc_trend_reserved <- c("value", "time", "subject", "mc_grp", "mc_off")
 
 
 #' Build the per-sample design for a trend model
@@ -117,7 +117,9 @@ mc_trend_design <- function(metadata, sample_col, subject_col, time_col,
 #' @param taxon_col Name of the taxon column, or `NULL` to detect it.
 #' @param taxa Character vector of taxa to keep, or `NULL` for all.
 #'
-#' @return A list of `mat` (taxa by samples, numeric) and `taxa`.
+#' @return A list of `mat` (taxa by samples, numeric), `taxa`, and
+#'   `totals`: each sample's sum over every taxon of the table as
+#'   supplied, which is the library size `family = "nb"` offsets by.
 #'
 #' @keywords internal
 #' @noRd
@@ -169,6 +171,11 @@ mc_trend_matrix <- function(abundance, taxon_col = NULL, taxa = NULL,
     storage.mode(mat) <- "numeric"
     rownames(mat) <- labs
 
+    # The library size is a property of the sample over every taxon, so it is
+    # read here and not later: after mc_trend_scale() it is gone, and after
+    # the taxa subset it would be the total of whichever rows were asked for.
+    totals <- colSums(mat, na.rm = TRUE)
+
     # Before the taxa subset, never after. TSS divides by the sample's total
     # over every taxon and CLR centres on the geometric mean over every
     # taxon, so both are properties of the whole composition. Scaling four
@@ -194,7 +201,7 @@ mc_trend_matrix <- function(abundance, taxon_col = NULL, taxa = NULL,
             call. = FALSE
         )
     }
-    list(mat = mat, taxa = labs)
+    list(mat = mat, taxa = labs, totals = totals)
 }
 
 
@@ -310,6 +317,12 @@ mc_trend_k <- function(times, k = NULL) {
 #' predict than a new subject would be. Where that matters the comparison
 #' to make is between subjects, not between observations.
 #'
+#' One further caveat under a non-Gaussian family. The closed form is an
+#' identity for a linear model and only an approximation for a generalised
+#' one, where the leverages are those of the working linear model at
+#' convergence rather than of the fit itself. It still ranks the candidates
+#' usefully, but it is no longer the exact quantity it is for `gaussian`.
+#'
 #' @param m A fitted `gam`.
 #'
 #' @return The mean squared deleted residual, or `Inf` when no point has
@@ -404,6 +417,297 @@ mc_trend_check_k_var <- function(k_var) {
 }
 
 
+#' The families a trend model can be fitted with
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_families <- c("gaussian", "nb", "tw")
+
+
+#' The mgcv family object for a family name
+#'
+#' @description
+#' `"gaussian"` returns `NULL` rather than `stats::gaussian()`. The two fit
+#' the same model, but `NULL` leaves [mc_trend_gam()] making the call it
+#' made before families existed, so the default path is unchanged rather
+#' than merely equivalent.
+#'
+#' Both non-Gaussian families carry a log link and estimate one further
+#' parameter by REML alongside the smoothing parameters: `nb()` the
+#' negative binomial's `theta`, `tw()` the Tweedie's power.
+#'
+#' @param family One of [mc_trend_families].
+#'
+#' @return An `mgcv` family object, or `NULL` for `"gaussian"`.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_family_obj <- function(family) {
+    fam <- switch(family,
+        gaussian = NULL,
+        nb = mgcv::nb(),
+        tw = mgcv::tw(),
+        stop("Unknown family '", family, "'.", call. = FALSE)
+    )
+    if (is.null(fam)) {
+        return(NULL)
+    }
+    mc_trend_family_reparent(fam)
+}
+
+
+#' Let an extended family see the namespace it came from
+#'
+#' @description
+#' `mgcv` builds an extended family's slots as closures over an environment
+#' whose parent is the global one. Several of those slots call `mgcv`'s own
+#' functions by bare name - `tw()`'s `aic` and `ls` call `ldTweedie` - so
+#' they resolve only while `mgcv` is attached. A package does not attach its
+#' dependencies, so under `mgcv::` qualification alone the family fits for a
+#' user who happens to have run `library(mgcv)` and fails for everyone else.
+#'
+#' The chain is therefore pointed at `mgcv`'s namespace instead of straight
+#' at the global environment. Nothing is shadowed by this: the namespace's
+#' own parents end at the global environment, so every name that resolved
+#' before still resolves, and the `mgcv` internals the slots were written
+#' against resolve too.
+#'
+#' @param fam An `mgcv` family object.
+#'
+#' @return `fam`, with the environment of its function slots reparented.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_family_reparent <- function(fam) {
+    ns <- asNamespace("mgcv")
+    for (nm in names(fam)) {
+        if (!is.function(fam[[nm]])) {
+            next
+        }
+        e <- environment(fam[[nm]])
+        if (is.null(e) || environmentName(e) != "") {
+            next
+        }
+        if (identical(parent.env(e), globalenv())) {
+            parent.env(e) <- ns
+        }
+    }
+    fam
+}
+
+
+#' Whether the family offsets by library size
+#'
+#' @param family One of [mc_trend_families].
+#'
+#' @return `TRUE` for the count family, `FALSE` otherwise.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_has_offset <- function(family) {
+    identical(family, "nb")
+}
+
+
+#' Refuse a family the input scale cannot support
+#'
+#' @description
+#' A family is a statement about what the numbers are. `nb` says they are
+#' counts, `tw` that they are non-negative amounts with mass at zero, and
+#' both model the log of their mean. A normalisation or a transform breaks
+#' that statement: a centred log ratio is not non-negative at all, and the
+#' arcsine root of a proportion has no mean-of-an-abundance left to put a
+#' log link on. So the admissible pairings are checked rather than left to
+#' produce a fit nobody can interpret.
+#'
+#' The check is on the values as they will be fitted, which is why it runs
+#' after the scaling: a table that looked like counts can stop being
+#' integer by the time it reaches the model.
+#'
+#' @param family One of [mc_trend_families].
+#' @param normalization,transform The resolved input scale.
+#' @param mat The matrix as it will be fitted.
+#'
+#' @return `TRUE`, invisibly. Called for the error.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_check_family <- function(family, normalization, transform, mat) {
+    if (identical(family, "gaussian")) {
+        return(invisible(TRUE))
+    }
+
+    if (!identical(transform, "NONE")) {
+        stop(
+            "family = \"", family, "\" models the abundance itself on a log ",
+            "link, so it needs transform = \"NONE\"; you gave \"", transform,
+            "\". Either drop the transform, or keep it and fit ",
+            "family = \"gaussian\", which is what a transformed scale is for.",
+            call. = FALSE
+        )
+    }
+    ok_norm <- if (identical(family, "nb")) "NONE" else c("NONE", "TSS")
+    if (!normalization %in% ok_norm) {
+        stop(
+            "family = \"", family, "\" needs normalization ",
+            mc_fmt_some(ok_norm), "; you gave \"", normalization, "\".",
+            if (identical(family, "nb")) {
+                paste0(
+                    " A count model takes the counts and the library size ",
+                    "separately, through depth, rather than a table already ",
+                    "divided by it."
+                )
+            } else {
+                ""
+            },
+            call. = FALSE
+        )
+    }
+
+    v <- mat[is.finite(mat)]
+    if (length(v) == 0L) {
+        stop("No finite values to fit.", call. = FALSE)
+    }
+    if (any(v < 0)) {
+        stop(
+            "family = \"", family, "\" needs non-negative values; the table ",
+            "holds negatives, so it is already on a log-ratio or centred ",
+            "scale. Fit family = \"gaussian\" instead.",
+            call. = FALSE
+        )
+    }
+    if (identical(family, "nb") && any(abs(v - round(v)) > 1e-8)) {
+        stop(
+            "family = \"nb\" models counts, and the table holds ",
+            "non-integer values. Pass the count table, or fit ",
+            "family = \"tw\", which takes non-negative amounts with zeros ",
+            "and does not require them to be whole.",
+            call. = FALSE
+        )
+    }
+    invisible(TRUE)
+}
+
+
+#' Resolve the library size, one value per sample in the design
+#'
+#' @description
+#' Three ways to say it, and one rule behind all three: the offset must line
+#' up with the samples by name. An unnamed vector is refused for that
+#' reason. It would be matched by position, and a silently misaligned
+#' offset is the worst failure available here: nothing errors, every taxon
+#' is fitted, and every trend is wrong by whatever the depths happened to
+#' be shuffled into.
+#'
+#' @param depth `NULL`, a `metadata` column name, or a named numeric vector.
+#' @param design The aligned design, whose `sample` column sets the order.
+#' @param totals Column sums of the table as supplied, from
+#'   [mc_trend_matrix()].
+#' @param metadata The caller's metadata, read only for a column name.
+#' @param sample_col The sample column of `metadata`.
+#'
+#' @return A list of `value` (numeric, one per row of `design`) and
+#'   `source` (a phrase for the record).
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_depth <- function(depth, design, totals, metadata, sample_col) {
+    if (is.null(depth)) {
+        miss <- setdiff(design$sample, names(totals))
+        if (length(miss) > 0L) {
+            stop(
+                "No column of abundance for sample(s) ", mc_fmt_some(miss),
+                ".",
+                call. = FALSE
+            )
+        }
+        v <- as.numeric(totals[design$sample])
+        src <- "column sums of the abundance table as supplied"
+    } else if (is.character(depth)) {
+        if (length(depth) != 1L) {
+            stop(
+                "depth as a column name must be a single string.",
+                call. = FALSE
+            )
+        }
+        if (!depth %in% names(metadata)) {
+            stop("metadata has no column '", depth, "'.", call. = FALSE)
+        }
+        v <- as.numeric(metadata[[depth]])[
+            match(design$sample, as.character(metadata[[sample_col]]))
+        ]
+        src <- paste0("metadata column '", depth, "'")
+    } else if (is.numeric(depth)) {
+        if (is.null(names(depth))) {
+            stop(
+                "depth must be named by sample. An unnamed vector would be ",
+                "matched by position, and an offset quietly paired with the ",
+                "wrong samples biases every taxon without failing.",
+                call. = FALSE
+            )
+        }
+        miss <- setdiff(design$sample, names(depth))
+        if (length(miss) > 0L) {
+            stop(
+                "depth has no entry for sample(s) ", mc_fmt_some(miss), ".",
+                call. = FALSE
+            )
+        }
+        v <- as.numeric(depth[design$sample])
+        src <- "supplied per sample"
+    } else {
+        stop(
+            "depth must be NULL, a metadata column name, or a numeric ",
+            "vector named by sample.",
+            call. = FALSE
+        )
+    }
+
+    bad <- !is.finite(v) | v <= 0
+    if (any(bad)) {
+        stop(
+            "Library size must be finite and greater than 0; it is not for ",
+            "sample(s) ", mc_fmt_some(design$sample[bad]), ". A log offset ",
+            "has nothing to say about a sample of size zero.",
+            call. = FALSE
+        )
+    }
+    list(value = v, source = src)
+}
+
+
+#' What the drawn y axis is, given the family and the input scale
+#'
+#' @description
+#' Only the non-Gaussian families are decided here. A `gaussian` fit keeps
+#' the label it has always had, because changing it is a separate question
+#' from adding families and the current one is wrong for a reason of its
+#' own: it names CLR whatever the table was.
+#'
+#' @param settings A result object's `settings`.
+#'
+#' @return A single string.
+#'
+#' @keywords internal
+#' @noRd
+mc_trend_y_label <- function(settings) {
+    fam <- settings$family %||% "gaussian"
+    if (identical(fam, "nb")) {
+        # The offset is held at the median library size for the drawing, so
+        # the curve is a count at a stated depth rather than at none.
+        return("Expected count (median depth)")
+    }
+    if (identical(fam, "tw")) {
+        return(if (identical(settings$normalization, "TSS")) {
+            "Expected relative abundance"
+        } else {
+            "Expected abundance"
+        })
+    }
+    "CLR abundance"
+}
+
+
 #' The fitted formula, as text for the record
 #'
 #' @description
@@ -412,14 +716,15 @@ mc_trend_check_k_var <- function(k_var) {
 #' sizes that were actually used are in the `k` column of the results.
 #'
 #' @param k Integer vector of one or more basis sizes.
-#' @param subject_effect,covariates,group As in [mc_trend_terms()].
+#' @param subject_effect,covariates,group,offset As in [mc_trend_terms()].
 #'
 #' @return A single string.
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_formula_text <- function(k, subject_effect, covariates, group) {
-    tt <- mc_trend_terms(k[1], subject_effect, covariates, group, TRUE)
+mc_trend_formula_text <- function(k, subject_effect, covariates, group,
+                                  offset = FALSE) {
+    tt <- mc_trend_terms(k[1], subject_effect, covariates, group, TRUE, offset)
     txt <- paste("value ~", paste(tt, collapse = " + "))
     if (length(k) == 1L) {
         return(txt)
@@ -437,13 +742,16 @@ mc_trend_formula_text <- function(k, subject_effect, covariates, group) {
 #' @param group One of `"none"`, `"ordered"` or `"global"`.
 #' @param group_smooth Logical. Whether the group gets a smooth of its own.
 #'   `FALSE` builds the null model for the nested comparison.
+#' @param offset Logical. Whether to carry `offset(log(mc_off))`, the
+#'   library-size offset a count family needs.
 #'
 #' @return A character vector of terms.
 #'
 #' @keywords internal
 #' @noRd
 mc_trend_terms <- function(k, subject_effect, covariates = NULL,
-                           group = "none", group_smooth = TRUE) {
+                           group = "none", group_smooth = TRUE,
+                           offset = FALSE) {
     tt <- sprintf("s(time, k = %d)", k)
 
     # The group enters in one of two parameterisations. With an ordered
@@ -467,6 +775,16 @@ mc_trend_terms <- function(k, subject_effect, covariates = NULL,
 
     if (length(covariates) > 0) {
         tt <- c(tt, covariates)
+    }
+
+    # The offset is a known quantity and not an estimated one, which is the
+    # whole point of it: a count's expected size scales with how deeply the
+    # sample was sequenced, and that part of the mean is accounted for
+    # rather than fitted. Left as a covariate instead it would be given a
+    # coefficient, and the trend over time would be free to absorb any
+    # depth that happened to drift with it.
+    if (isTRUE(offset)) {
+        tt <- c(tt, "offset(log(mc_off))")
     }
 
     tt <- c(tt, switch(subject_effect,
@@ -605,14 +923,19 @@ mc_trend_blank <- function(taxon, n_obs = 0L, n_subjects = 0L, note = NA_charact
 #' @param k_select `"aic"` or `"variance"`, used only when `k` has more
 #'   than one candidate.
 #' @param k_var The fraction for the variance rule.
+#' @param family One of [mc_trend_families]. The count family also reads
+#'   `d$mc_off` as its offset.
 #'
 #' @return A one-row data.frame of `taxon`, `edf`, `F`, `p_value`, `k`,
-#'   `n_obs`, `n_subjects`, `converged`, `note`.
+#'   `n_obs`, `n_subjects`, `converged`, `note`. `F` holds whatever
+#'   statistic `summary.gam()` reports for the term, which is a chi-squared
+#'   rather than an F when the family fixes the scale.
 #'
 #' @keywords internal
 #' @noRd
 mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon,
-                             k_select = "aic", k_var = 0.99) {
+                             k_select = "aic", k_var = 0.99,
+                             family = "gaussian") {
     d <- d[!is.na(d$value), , drop = FALSE]
     n_obs <- nrow(d)
     n_sub <- length(unique(d$subject))
@@ -645,16 +968,20 @@ mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon,
         return(mc_trend_blank(taxon, n_obs, n_sub, "too few time points"))
     }
 
+    fam <- mc_trend_family_obj(family)
+    use_off <- mc_trend_has_offset(family)
+
     out <- tryCatch(
         {
             fit_k <- function(kk) {
                 mc_trend_gam(
                     mc_trend_formula(
                         mc_trend_terms(
-                            kk, subject_effect, covariates, group, TRUE
+                            kk, subject_effect, covariates, group, TRUE,
+                            use_off
                         )
                     ),
-                    d
+                    d, fam
                 )
             }
             ch <- mc_trend_choose_k(cand, fit_k, k_select, k_var)
@@ -674,9 +1001,11 @@ mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon,
                 mc_trend_read_smooth(m1, NULL)
             } else {
                 f0 <- mc_trend_formula(
-                    mc_trend_terms(kk, subject_effect, covariates, group, FALSE)
+                    mc_trend_terms(
+                        kk, subject_effect, covariates, group, FALSE, use_off
+                    )
                 )
-                m0 <- mc_trend_gam(f0, d)
+                m0 <- mc_trend_gam(f0, d, fam)
                 mc_trend_read_anova(m0, m1)
             }
             # The null model is built at the chosen k so that the pair being
@@ -719,14 +1048,21 @@ mc_trend_fit_one <- function(d, k, subject_effect, covariates, group, taxon,
 #'
 #' @param f The formula.
 #' @param d The taxon's data.
+#' @param family An `mgcv` family object, or `NULL` for `gam()`'s own
+#'   default. `NULL` rather than `gaussian()` so that the Gaussian path is
+#'   the call it has always been.
 #'
 #' @return A fitted `gam`.
 #'
 #' @keywords internal
 #' @noRd
-mc_trend_gam <- function(f, d) {
+mc_trend_gam <- function(f, d, family = NULL) {
     withCallingHandlers(
-        mgcv::gam(f, data = d, method = "REML"),
+        if (is.null(family)) {
+            mgcv::gam(f, data = d, method = "REML")
+        } else {
+            mgcv::gam(f, data = d, family = family, method = "REML")
+        },
         warning = function(w) {
             if (grepl("repeated 1-d smooths", conditionMessage(w))) {
                 invokeRestart("muffleWarning")
