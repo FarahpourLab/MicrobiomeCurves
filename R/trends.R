@@ -698,7 +698,9 @@ mc_trend_print <- function(x, what) {
 
     cat("<", what, ">\n", sep = "")
     cat("  taxa tested  : ", sum(r$converged), " of ", nrow(r), "\n", sep = "")
-    cat("  model        : s(time, k = ", s$k, ") + ", s$subject_effect,
+    cat("  model        : s(time, k = ",
+        if (length(s$k) == 1L) s$k else "chosen per taxon",
+        ") + ", s$subject_effect,
         " subject effect\n",
         sep = ""
     )

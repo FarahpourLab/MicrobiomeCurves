@@ -40,6 +40,17 @@ mc_assign_clusters <- function(fp, scores, k_use, subjects, method) {
         # score-based route stands in rather than losing the taxon.
     }
 
+    # The same ceiling the silhouette search works under, applied here too
+    # because k_use can be a number the caller fixed rather than one the
+    # search chose. Falling back to a single cluster says "these curves are
+    # not distinguishable", which is the truth of that case.
+    k_use <- min(k_use, nrow(unique(signif(scores, 12))))
+    if (k_use < 2) {
+        clusters <- rep(1L, length(subjects))
+        names(clusters) <- subjects
+        return(clusters)
+    }
+
     km <- kmeans(scores, centers = k_use, nstart = 20)
     clusters <- km$cluster
     names(clusters) <- subjects

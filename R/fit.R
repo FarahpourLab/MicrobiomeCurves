@@ -81,7 +81,13 @@ select_C_silhouette_plot <- function(
     n <- nrow(scores)
     if (n < 3) return(1)
 
-    max_C <- min(max_C, n - 1)
+    # k-means cannot place more centres than there are distinct points, and
+    # asking it to is an error rather than a poor fit. Score vectors
+    # coincide whenever two curves are alike enough that FPCA cannot tell
+    # them apart, which is common on small sets, so the ceiling is the
+    # number of distinct rows and not the number of curves.
+    n_distinct <- nrow(unique(signif(scores, 12)))
+    max_C <- min(max_C, n - 1, n_distinct - 1)
     if (max_C < 2) return(1)
 
     sil_scores <- rep(NA_real_, max_C)
@@ -90,9 +96,15 @@ select_C_silhouette_plot <- function(
 
     for (k in seq(2, max_C)) {
         mc_reset_rng(seed)
-        km <- stats::kmeans(scores, centers = k, nstart = 10)
-        sil <- cluster::silhouette(km$cluster, dmat)
-        sil_scores[k] <- mean(sil[, 3])
+        # A k that cannot be fitted is one the data does not support, so it
+        # scores as missing and the search moves on rather than failing.
+        sil_scores[k] <- tryCatch(
+            {
+                km <- stats::kmeans(scores, centers = k, nstart = 10)
+                mean(cluster::silhouette(km$cluster, dmat)[, 3])
+            },
+            error = function(e) NA_real_
+        )
     }
 
     valid_k <- which(!is.na(sil_scores))
